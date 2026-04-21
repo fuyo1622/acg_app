@@ -4,7 +4,7 @@ A local-first, mobile Progressive Web Application (PWA) designed to catalog Anim
 
 ## Features
 - **Client-Side Operations**: 100% Client-side operation using IndexedDB via Dexie.js for data retention without loading screens.
-- **Image handling**: Capture and store item photos on the device.
+- **Image Handling**: Capture and securely compress item photos automatically before storing them on your device.
 - **Querying**: Multi-dimensional filtering attributes for searching specific owned items.
 - **Bilingual Context**: Switch dynamically between Traditional Chinese (`zh-TW`) and English.
 

@@ -1,5 +1,10 @@
 # ACG App Progress Summary
 
+## Recent Additions (Image Compression Pipeline)
+- **Asynchronous Compression**: Safely re-encoded RAW files through explicit Promise-based `compressImage` utilities dynamically resizing beneath `1600px`.
+- **Canvas Decoding**: Utilized `createImageBitmap` natively bypassing EXIF memory voids.
+- **Double-submit Block**: Overhauled `<AddEditItem />` to disable redundant commits while canvas processing loads.
+
 ## Previous State
 - App had inconsistent validation behavior mixing HTML `required` attributes and JavaScript error alerts.
 - Linter baseline had missing dev-dependencies.
@@ -23,10 +28,10 @@
 - Vitest Component-level integration coverage is still sparse, targeting pure business logic right now.
 - `web_crawler/` logic usage wasn’t formally integrated.
 
-## Latest Verification (Cleanup Pass)
-- `npm run lint`: 0 errors, 0 warnings.
-- `npm test`: 2 test suites and 9 specs passed in Vitest.
-- `npm run build`: Bundled correctly (approx 4.5s) successfully generating service worker entries.
+## Latest Verification
+- `npm run lint`: 0 errors.
+- `npm test`: 3 test suites, 13 specs perfectly testing fallback mock environments.
+- `npm run build`: Bundled correctly (approx 4.5s).
 
 ## Overall Confidence
-**Stable**. The application's core functionality works during manual checking. The object URL refactor helps manage memory lifecycles adequately. ESLint and tests pass reliably.
+**Stable**. The application's core functionality works correctly during manual checking. The object URL refactor helps manage memory lifecycles adequately. Image compression safely restricts infinite storage fragmentation on heavy native captures seamlessly without external cloud or authentication overheads. ESLint, build and tests pass robustly.

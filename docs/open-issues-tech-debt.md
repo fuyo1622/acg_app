@@ -21,9 +21,9 @@
 - **Recommended Next Step**: Verify actual service worker payload sizes on mobile emulation.
 - **Priority**: Low
 
-## UX Limitations
-- **Title**: Missing Image Compression on Submit
-- **Affected Files**: `src/components/ImageUploader.jsx`
-- **Why It Matters**: User camera captures are stored RAW directly as enormous blobs into IndexedDB severely fragmenting allocation limits.
-- **Recommended Next Step**: Implement simple canvas compression pipelines natively before storage.
-- **Priority**: High
+## Hardware Limitations
+- **Title**: Native Canvas EXIF Reorientation Fragmentation
+- **Affected Files**: `src/utils/imageUtils.js`
+- **Why It Matters**: While modern browsers explicitly respect EXIF tags natively when decoding buffers via `createImageBitmap({ imageOrientation: 'from-image' })`, severely outdated clients might ignore orientation properties silently when exporting `image/webp`.
+- **Recommended Next Step**: Wait for older hardware cycles to pass.
+- **Priority**: Low

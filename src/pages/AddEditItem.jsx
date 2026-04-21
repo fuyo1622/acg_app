@@ -8,6 +8,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_TYPES } from '../utils/constants';
 import { validateItem } from '../utils/validationUtils';
 import { getUniqueValues } from '../utils/filterUtils';
+import { compressImage } from '../utils/imageUtils';
 import './AddEditItem.css';
 
 export default function AddEditItem() {
@@ -24,6 +25,7 @@ export default function AddEditItem() {
   });
   const [photo, setPhoto] = useState(null);
   const [loading, setLoading] = useState(isEditing);
+  const [isSaving, setIsSaving] = useState(false);
   const [customType, setCustomType] = useState('');
 
   // Fetch all items for autocomplete
@@ -68,6 +70,7 @@ export default function AddEditItem() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     
     let finalType = formData.merchandise_type;
     if (finalType === '__custom__') {
@@ -84,11 +87,17 @@ export default function AddEditItem() {
       return;
     }
 
+    setIsSaving(true);
     try {
+      let processedPhoto = photo;
+      if (photo instanceof File) {
+        processedPhoto = await compressImage(photo);
+      }
+
       const itemData = {
         ...formData,
         merchandise_type: finalType,
-        photo,
+        photo: processedPhoto,
         updated_at: new Date()
       };
 
@@ -103,6 +112,7 @@ export default function AddEditItem() {
     } catch (error) {
       console.error("Error saving item:", error);
       alert(t('saveError'));
+      setIsSaving(false);
     }
   };
 
@@ -217,12 +227,12 @@ export default function AddEditItem() {
         </div>
 
         <div className="form-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)} disabled={isSaving}>
             {t('cancel')}
           </button>
-          <button type="submit" className="btn btn-primary">
-            <Save size={20} />
-            {isEditing ? t('saveChanges') : t('addItem')}
+          <button type="submit" className="btn btn-primary" disabled={isSaving}>
+             {isSaving ? <span className="loading-spinner"></span> : <Save size={20} />}
+             {isSaving ? t('loading') : (isEditing ? t('saveChanges') : t('addItem'))}
           </button>
         </div>
       </form>

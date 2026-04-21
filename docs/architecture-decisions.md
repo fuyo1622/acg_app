@@ -35,3 +35,9 @@
 **Context**: Incorporating external headless scripts into an offline-first PWA fundamentally changes the security permissions stack.
 **Choice**: Exclude it from the main component loop for this phase.
 **Consequences**: Maintains system purity and focus towards the base application cataloging feature.
+
+## Image Compression
+**Decision**: Implement asynchronous client-side canvas-mediated compression defaulting to `image/webp` dynamically.
+**Context**: Heavy native phone photos (3MB-8MB) stored raw severely fragmented the `db.items` rendering the Dexie limits incredibly tight.
+**Choice**: `createImageBitmap` natively respects EXIF rotation without WASM bloat. It passes payloads to an active canvas resized proportionately below `1600px`. Yielding `image/webp` explicitly preserves arbitrary Alpha/Transparency channels out of PNG uploads ensuring black-box voids don't happen.
+**Consequences**: Safely keeps device quotas manageable entirely offline without an authentication or cloud backend hook. Allows original blob passthroughs upon render limits.

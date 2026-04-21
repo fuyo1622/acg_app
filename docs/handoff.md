@@ -32,6 +32,7 @@ This is a local-first web application designed for mobile devices. Its main goal
 - **Validation**: Replaced inline mixed constraints with pure utility logic. `HTML required` was dropped for dynamic JS validation requiring *at least* part of a name or series.  
 - **Filter logic**: Decoupled from `Home.jsx` into pure util `filterUtils.js`. 
 - **Object URLs**: Refactored to manage memory lifecycles via `useObjectUrl.js` custom hook, designed to ensure `URL.revokeObjectURL()` fires when components unmount.
+- **Compression**: Asynchronous browser-native compression automatically runs via `imageUtils.js` capping max dimensions natively against uploaded files prior to IndexedDB writes.
 - **Testing**: Added a `vitest` suite for all extracted pure JS.
 
 ## What Was Intentionally Left Alone
