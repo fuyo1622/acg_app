@@ -17,12 +17,12 @@ export function filterItems({ items, searchTerm, filterType, filterSeries, filte
   });
 }
 
+import { DEFAULT_TYPES } from './constants';
+
 export function getUniqueValues(items) {
   if (!items) return { uniqueSeries: [], uniqueCharacters: [], uniqueCustomTypes: [] };
   
-  const defaultTypes = ['figure', 'plush', 'acrylic', 'badge', 'apparel', 'poster', 'other'];
-  
-  const uniqueCustomTypes = [...new Set(items.map(i => i.merchandise_type).filter(v => v && !defaultTypes.includes(v)))];
+  const uniqueCustomTypes = [...new Set(items.map(i => i.merchandise_type).filter(v => v && !DEFAULT_TYPES.includes(v)))];
   const uniqueSeries = [...new Set(items.map(i => i.series).filter(Boolean))];
   const uniqueCharacters = [...new Set(items.map(i => i.character).filter(Boolean))];
 

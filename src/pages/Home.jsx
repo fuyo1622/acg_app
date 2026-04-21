@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, Globe } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ItemCard from '../components/ItemCard';

@@ -26,9 +26,9 @@
 
 ## Object URL Lifecycle
 **Decision**: Implement `useObjectUrl` hook.
-**Context**: `URL.createObjectURL(file)` was happening mid-render loop. React re-renders were quietly causing massive memory leaks in browser caches without `revokeObjectURL` called properly.
+**Context**: `URL.createObjectURL(file)` was happening mid-render loop. React re-renders were causing memory leaks in browser caches without `revokeObjectURL` called properly.
 **Choice**: Wrapped creation in `useEffect` within a single hook that automatically fires the revoke destructor upon unmount.
-**Consequences**: Safely stabilizes app performance. Needed extraction of an `ItemCard` component so list rendering respects unmounting safely.
+**Consequences**: Intended to manage object URL lifecycles safely. Needed extraction of an `ItemCard` component so list rendering respects unmounting safely.
 
 ## Extractor Boundary (Web Crawler)
 **Decision**: Delay integration of `web_crawler`.

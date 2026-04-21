@@ -1,7 +1,7 @@
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
-import { ArrowLeft, Edit2, MapPin, Tag, MessageSquare, ImageOff } from 'lucide-react';
+import { ArrowLeft, Edit2, MessageSquare, ImageOff } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import './AddEditItem.css'; // Reusing some base styles

@@ -1,11 +1,11 @@
 # ACG Merchandise Collector App
 
-A local-first, mobile Progressive Web Application (PWA) designed to gracefully catalog Anime, Comic, and Gaming merchandise effortlessly offline. 
+A local-first, mobile Progressive Web Application (PWA) designed to catalog Anime, Comic, and Gaming merchandise offline. 
 
 ## Features
-- **Zero-Latency**: 100% Client-side operation using IndexedDB via Dexie.js for immediate, snappy data retention without loading screens.
-- **Image handling**: Capture and curate item photos securely on your device natively.
-- **Complex Querying**: Fast multi-dimensional filtering attributes for hunting exactly what is owned mid-convention.
+- **Client-Side Operations**: 100% Client-side operation using IndexedDB via Dexie.js for data retention without loading screens.
+- **Image handling**: Capture and store item photos on the device.
+- **Querying**: Multi-dimensional filtering attributes for searching specific owned items.
 - **Bilingual Context**: Switch dynamically between Traditional Chinese (`zh-TW`) and English.
 
 ## Tech Stack

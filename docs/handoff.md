@@ -31,7 +31,7 @@ This is a local-first web application designed for mobile devices. Its main goal
 ## What Was Refactored Recently
 - **Validation**: Replaced inline mixed constraints with pure utility logic. `HTML required` was dropped for dynamic JS validation requiring *at least* part of a name or series.  
 - **Filter logic**: Decoupled from `Home.jsx` into pure util `filterUtils.js`. 
-- **Object URLs**: Refactored to eliminate memory leaks via `useObjectUrl.js` custom hook, guaranteeing `URL.revokeObjectURL()` fires when items dismiss.
+- **Object URLs**: Refactored to manage memory lifecycles via `useObjectUrl.js` custom hook, designed to ensure `URL.revokeObjectURL()` fires when components unmount.
 - **Testing**: Added a `vitest` suite for all extracted pure JS.
 
 ## What Was Intentionally Left Alone
