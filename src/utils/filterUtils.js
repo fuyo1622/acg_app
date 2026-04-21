@@ -1,3 +1,5 @@
+import { DEFAULT_TYPES } from './constants';
+
 export function filterItems({ items, searchTerm, filterType, filterSeries, filterCharacter }) {
   if (!items) return [];
   
@@ -17,7 +19,6 @@ export function filterItems({ items, searchTerm, filterType, filterSeries, filte
   });
 }
 
-import { DEFAULT_TYPES } from './constants';
 
 export function getUniqueValues(items) {
   if (!items) return { uniqueSeries: [], uniqueCharacters: [], uniqueCustomTypes: [] };
