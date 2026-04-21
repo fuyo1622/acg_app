@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import { useLanguage } from '../contexts/LanguageContext';
+import { DEFAULT_TYPES } from '../utils/constants';
+import { validateItem } from '../utils/validationUtils';
+import { getUniqueValues } from '../utils/filterUtils';
 import './AddEditItem.css';
 
 export default function AddEditItem() {
@@ -25,11 +28,7 @@ export default function AddEditItem() {
 
   // Fetch all items for autocomplete
   const allItems = useLiveQuery(() => db.items.toArray());
-  const uniqueSeries = [...new Set(allItems?.map(i => i.series).filter(Boolean))] || [];
-  const uniqueCharacters = [...new Set(allItems?.map(i => i.character).filter(Boolean))] || [];
-  
-  const defaultTypes = ['figure', 'plush', 'acrylic', 'badge', 'apparel', 'poster', 'other'];
-  const uniqueCustomTypes = [...new Set(allItems?.map(i => i.merchandise_type).filter(v => v && !defaultTypes.includes(v)))] || [];
+  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(allItems);
 
   // Fetch item if editing
   useLiveQuery(async () => {
@@ -37,10 +36,7 @@ export default function AddEditItem() {
       const item = await db.items.get(parseInt(id));
       if (item) {
         let mType = item.merchandise_type;
-        // Check if the current type is not in any standard list
-        // Actually, if it's in uniqueCustomTypes, it WILL show up in the dropdown
-        // but if it's somehow missing, we push it to the custom input.
-        let isCustomUnlisted = mType && !defaultTypes.includes(mType) && !uniqueCustomTypes.includes(mType);
+        let isCustomUnlisted = mType && !DEFAULT_TYPES.includes(mType) && !uniqueCustomTypes.includes(mType);
         
         if (isCustomUnlisted) {
            setCustomType(mType);
@@ -73,19 +69,18 @@ export default function AddEditItem() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Quick validation
-    if (!formData.series && !formData.character) {
-      alert(t('validationError'));
-      return;
-    }
-
     let finalType = formData.merchandise_type;
     if (finalType === '__custom__') {
       finalType = customType.trim();
     }
 
-    if (!finalType) {
-      alert(t('validationError') + " (Please select a Merchandise Type)");
+    const { isValid, errorKey } = validateItem({
+      ...formData,
+      merchandise_type: finalType
+    });
+
+    if (!isValid) {
+      alert(t(errorKey));
       return;
     }
 
@@ -151,7 +146,6 @@ export default function AddEditItem() {
             value={formData.series} 
             onChange={handleChange} 
             placeholder={t('seriesPlaceholder')}
-            required
             autoComplete="off"
           />
           <datalist id="series-list">
@@ -187,7 +181,7 @@ export default function AddEditItem() {
               required
             >
               <option value="" disabled>---</option>
-              {defaultTypes.map(type => (
+              {DEFAULT_TYPES.map(type => (
                  <option key={type} value={type}>{lang === 'en' ? type : (t(type) !== type ? t(type) : type)}</option>
               ))}
               {uniqueCustomTypes.map(type => (

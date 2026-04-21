@@ -1,16 +1,34 @@
-# React + Vite
+# ACG Merchandise Collector App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A local-first, mobile Progressive Web Application (PWA) designed to gracefully catalog Anime, Comic, and Gaming merchandise effortlessly offline. 
 
-Currently, two official plugins are available:
+## Features
+- **Zero-Latency**: 100% Client-side operation using IndexedDB via Dexie.js for immediate, snappy data retention without loading screens.
+- **Image handling**: Capture and curate item photos securely on your device natively.
+- **Complex Querying**: Fast multi-dimensional filtering attributes for hunting exactly what is owned mid-convention.
+- **Bilingual Context**: Switch dynamically between Traditional Chinese (`zh-TW`) and English.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Tech Stack
+- React 19
+- Vite
+- Dexie + IndexedDB
+- React Router 
+- vite-plugin-pwa
 
-## React Compiler
+## Project Scripts
+1. **`npm install`**: Prepare local environment context.
+2. **`npm run dev`**: Execute live server at `localhost:5173`.
+3. **`npm run build`**: Assemble standard production assets locally into `/dist`.
+4. **`npm run lint`**: Trigger ESLint configuration pipelines against `/src`.
+5. **`npm test`**: Initiate internal logic regressions via Vitest.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Limitations
+- Operates totally offline securely, so cross-device syncs natively do not function without third party integrations.
+- User imagery is stored unmodified directly into IndexedDB, preserving original fidelity but rapidly inflating database size footprints depending upon camera settings.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Documentation Reference
+Check the local `docs/` folder for comprehensive implementation records:
+- `handoff.md`: Primary reference manual.
+- `architecture-decisions.md`: Extracted ADR history for storage & routing choices.
+- `open-issues-tech-debt.md`: Upcoming pipelines and testing enhancements.
+- `progress-summary.md`: Historical baseline stability records.

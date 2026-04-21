@@ -31,7 +31,8 @@ export const translations = {
     notesPlaceholder: 'Condition, price, origin, etc.',
     notes: 'Notes',
     deleteConfirm: 'Are you sure you want to delete this item?',
-    validationError: 'Please enter at least a series or character.',
+    validationRequireOne: 'Please enter at least a series or character.',
+    validationRequireType: 'Please select a merchandise type.',
     saveError: 'Failed to save item. Storage might be full.',
     
     // Types
@@ -83,7 +84,8 @@ export const translations = {
     notesPlaceholder: '商品狀況、價格、來源等',
     notes: '備註',
     deleteConfirm: '確定要刪除這個項目嗎？',
-    validationError: '請至少輸入作品系列或角色名稱。',
+    validationRequireOne: '請至少輸入作品系列或角色名稱。',
+    validationRequireType: '請選擇一個周邊類型。',
     saveError: '儲存失敗，儲存空間可能已滿。',
     
     // Types

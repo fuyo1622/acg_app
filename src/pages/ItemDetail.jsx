@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { ArrowLeft, Edit2, MapPin, Tag, MessageSquare, ImageOff } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useObjectUrl } from '../hooks/useObjectUrl';
 import './AddEditItem.css'; // Reusing some base styles
 
 export default function ItemDetail() {
@@ -13,11 +14,11 @@ export default function ItemDetail() {
   const item = useLiveQuery(
     () => db.items.get(parseInt(id))
   );
+  
+  const url = useObjectUrl(item?.photo);
 
   if (item === undefined) return <div className="loading">{t('loading')}</div>;
   if (item === null) return <div className="loading">{t('noItemsFound')}</div>;
-
-  const url = item.photo ? URL.createObjectURL(item.photo) : null;
 
   return (
     <div className="item-detail-page">

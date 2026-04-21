@@ -4,6 +4,9 @@ import { db } from '../services/db';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, Globe } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import ItemCard from '../components/ItemCard';
+import { DEFAULT_TYPES } from '../utils/constants';
+import { filterItems, getUniqueValues } from '../utils/filterUtils';
 import './Home.css';
 
 export default function Home() {
@@ -19,24 +22,8 @@ export default function Home() {
     () => db.items.orderBy('created_at').reverse().toArray()
   );
 
-  const defaultTypes = ['figure', 'plush', 'acrylic', 'badge', 'apparel', 'poster', 'other'];
-  const uniqueCustomTypes = [...new Set(items?.map(i => i.merchandise_type).filter(v => v && !defaultTypes.includes(v)))] || [];
-  const uniqueSeries = [...new Set(items?.map(i => i.series).filter(Boolean))] || [];
-  const uniqueCharacters = [...new Set(items?.map(i => i.character).filter(Boolean))] || [];
-
-  // Filter items based on search and dropdown
-  const filteredItems = items?.filter(item => {
-    const matchesSearch = 
-      (item.series || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.character || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.notes || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesType = filterType === 'all' || item.merchandise_type === filterType;
-    const matchesSeries = filterSeries === 'all' || item.series === filterSeries;
-    const matchesCharacter = filterCharacter === 'all' || item.character === filterCharacter;
-    
-    return matchesSearch && matchesType && matchesSeries && matchesCharacter;
-  }) || [];
+  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(items);
+  const filteredItems = filterItems({ items, searchTerm, filterType, filterSeries, filterCharacter });
 
   return (
     <div className="home-page">
@@ -79,7 +66,7 @@ export default function Home() {
                 className="filter-select"
              >
                 <option value="all">{t('allTypes')}</option>
-                {defaultTypes.map(type => (
+                {DEFAULT_TYPES.map(type => (
                    <option key={type} value={type}>{lang === 'en' ? type : (t(type) !== type ? t(type) : type)}</option>
                 ))}
                 {uniqueCustomTypes.map(type => (
@@ -125,24 +112,7 @@ export default function Home() {
           </div>
         ) : (
           filteredItems.map(item => (
-             <div 
-                key={item.id} 
-                className="item-card glass-panel"
-                onClick={() => navigate(`/item/${item.id}`)}
-             >
-                <div className="image-container">
-                   {item.photo ? (
-                      <img src={URL.createObjectURL(item.photo)} alt={item.character || item.series} loading="lazy" />
-                   ) : (
-                      <div className="no-image">{t('noPhoto')}</div>
-                   )}
-                   <div className="item-badge">{t(item.merchandise_type)}</div>
-                </div>
-                <div className="item-info">
-                   <h3>{item.character || t('unknownCharacter')}</h3>
-                   <p className="series">{item.series || t('unknownSeries')}</p>
-                </div>
-             </div>
+             <ItemCard key={item.id} item={item} />
           ))
         )}
       </main>
