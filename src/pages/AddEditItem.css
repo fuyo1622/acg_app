@@ -1,0 +1,151 @@
+.form-page {
+  padding-bottom: 2rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 0;
+  margin-bottom: 1rem;
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-dark);
+  z-index: 10;
+}
+
+.page-header h2 {
+  flex: 1;
+  text-align: center;
+  margin: 0;
+}
+
+.back-btn, .delete-btn, .edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  width: 44px;
+  height: 44px;
+}
+
+.back-btn:hover, .edit-btn:hover {
+  background-color: var(--bg-card);
+}
+
+.delete-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.item-form {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.select-wrapper {
+  overflow: hidden;
+  position: relative;
+  padding: 0;
+}
+
+.select-wrapper select {
+  margin: 0;
+  border: none;
+  background: transparent;
+  width: 100%;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1em;
+}
+
+.select-wrapper select option {
+  background-color: var(--bg-dark);
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.form-actions button {
+  flex: 1;
+}
+
+/* Specific styling for item detail view overlay */
+.item-detail-page {
+  padding-bottom: 4rem;
+}
+
+.detail-image-container {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  background-color: var(--bg-card);
+  display: flex;
+  justify-content: center;
+}
+
+.detail-image-container img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  max-height: 60vh;
+}
+
+.detail-info {
+  padding: 1.5rem;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.detail-header h1 {
+  margin-bottom: 0.25rem;
+  font-size: 2rem;
+}
+
+.detail-badge {
+  display: inline-block;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-primary);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: capitalize;
+}
+
+@media (max-width: 480px) {
+  .page-header h2 {
+    font-size: 1.1rem;
+  }
+}
