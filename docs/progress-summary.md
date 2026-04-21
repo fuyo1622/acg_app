@@ -1,6 +1,8 @@
 # ACG App Progress Summary
 
-## Recent Additions (Image Compression Pipeline)
+## Recent Additions (Backup & Restore Pipelines)
+- **JSON Payload Generation**: Separated explicitly decoupled pure logic boundaries (`backupUtils.js`) safely generating single-file offline structures.
+- **Micro-transaction Replacements**: Structured validation limits executing user confirm dialogs fully *before* forcing memory-intensive `fetch(dataURL)` Blob rehydrations synchronously overwriting (`replace`) DB columns securely.
 - **Asynchronous Compression**: Safely re-encoded RAW files through explicit Promise-based `compressImage` utilities dynamically resizing beneath `1600px`.
 - **Canvas Decoding**: Utilized `createImageBitmap` natively bypassing EXIF memory voids.
 - **Double-submit Block**: Overhauled `<AddEditItem />` to disable redundant commits while canvas processing loads.

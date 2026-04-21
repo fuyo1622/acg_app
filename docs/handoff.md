@@ -33,6 +33,7 @@ This is a local-first web application designed for mobile devices. Its main goal
 - **Filter logic**: Decoupled from `Home.jsx` into pure util `filterUtils.js`. 
 - **Object URLs**: Refactored to manage memory lifecycles via `useObjectUrl.js` custom hook, designed to ensure `URL.revokeObjectURL()` fires when components unmount.
 - **Compression**: Asynchronous browser-native compression automatically runs via `imageUtils.js` capping max dimensions natively against uploaded files prior to IndexedDB writes.
+- **Backup & Restore**: Manual export boundaries decouple completely across pure helper payloads (`backupUtils.js`), routing heavy Base64 array parsing around `window.confirm` explicitly protecting destructive offline table merges natively.
 - **Testing**: Added a `vitest` suite for all extracted pure JS.
 
 ## What Was Intentionally Left Alone

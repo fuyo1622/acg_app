@@ -7,3 +7,5 @@ export const DEFAULT_TYPES = [
   'poster', 
   'other'
 ];
+
+export const BACKUP_VERSION = 1;

@@ -41,3 +41,9 @@
 **Context**: Heavy native phone photos (3MB-8MB) stored raw severely fragmented the `db.items` rendering the Dexie limits incredibly tight.
 **Choice**: `createImageBitmap` natively respects EXIF rotation without WASM bloat. It passes payloads to an active canvas resized proportionately below `1600px`. Yielding `image/webp` explicitly preserves arbitrary Alpha/Transparency channels out of PNG uploads ensuring black-box voids don't happen.
 **Consequences**: Safely keeps device quotas manageable entirely offline without an authentication or cloud backend hook. Allows original blob passthroughs upon render limits.
+
+## Export & Import Strategy
+**Decision**: Use Base64-encoded Data URLs within a standard `.json` single-file export utilizing a catastrophic 'Replace' policy on import.
+**Context**: Re-syncing localized offline architectures inherently risks duplication vectors, whilst proprietary db-schema exports block user portability natively across basic texts.
+**Choice**: Native `readAsDataURL` easily serializes buffers directly without advanced indexing protocols. Explicitly demanding an atomic `db.items.clear()` before inserting imported arrays removes schema conflict/duplication issues indefinitely. Regenerative buffers dynamically default back out targeting explicit `Blob` identities cleanly bypassing application generational-compression sequences inherently.
+**Consequences**: Base64 artificially inflates `.json` memory payloads massively against binary files. Memory spikes occur precisely during the `fetch(dataUrl).blob()` rehydration phase entirely restricted within short offline allocations blocking until successfully completing prior to Database commits securely preventing orphaned wipes.

@@ -21,9 +21,9 @@
 - **Recommended Next Step**: Verify actual service worker payload sizes on mobile emulation.
 - **Priority**: Low
 
-## Hardware Limitations
-- **Title**: Native Canvas EXIF Reorientation Fragmentation
-- **Affected Files**: `src/utils/imageUtils.js`
-- **Why It Matters**: While modern browsers respect EXIF tags natively when decoding buffers via `createImageBitmap({ imageOrientation: 'from-image' })`, some outdated clients might ignore orientation properties silently when exporting `image/webp`.
-- **Recommended Next Step**: Wait for older hardware cycles to pass.
+## Database Constraints
+- **Title**: Base64 JSON Payload Inflation
+- **Affected Files**: `src/utils/backupUtils.js`
+- **Why It Matters**: To ensure totally offline user portability across basic hardware without massive backend systems, Database Exports natively encode raw Image Blobs directly into Base64 representations dynamically nested inside single `.json` files. This artificially spikes memory signatures dynamically (up to 30%) over standard dual-binary schemas natively increasing system thresholds temporally upon executing Array Hydration bounds.
+- **Recommended Next Step**: In future scaling scopes pushing deeply over standard quotas, explore splitting `dexie-export-import` binary `.ndjson` dependencies dynamically.
 - **Priority**: Low
