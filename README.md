@@ -24,7 +24,7 @@ A local-first, mobile Progressive Web Application (PWA) designed to catalog Anim
 
 ## Limitations
 - Operates totally offline securely, so cross-device syncs natively do not function without third party integrations.
-- User imagery is stored unmodified directly into IndexedDB, preserving original fidelity but rapidly inflating database size footprints depending upon camera settings.
+- User imagery is compressed locally before storage in normal upload flows to reduce the database footprint, but overall storage can still grow with many photos. Native browser mechanisms are used for EXIF orientation handling, which may have edge cases on outdated devices.
 
 ## Documentation Reference
 Check the local `docs/` folder for comprehensive implementation records:

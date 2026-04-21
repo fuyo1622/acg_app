@@ -132,12 +132,12 @@ export default function AddEditItem() {
   return (
     <div className="form-page">
       <header className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('cancel')}>
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('cancel')} disabled={isSaving}>
           <ArrowLeft size={24} />
         </button>
         <h2>{isEditing ? t('editItem') : t('newItem')}</h2>
         {isEditing && (
-          <button className="delete-btn" onClick={handleDelete} aria-label={t('deleteConfirm')}>
+          <button className="delete-btn" onClick={handleDelete} aria-label={t('deleteConfirm')} disabled={isSaving}>
             <Trash2 size={24} color="var(--danger)" />
           </button>
         )}
@@ -232,7 +232,7 @@ export default function AddEditItem() {
           </button>
           <button type="submit" className="btn btn-primary" disabled={isSaving}>
              {isSaving ? <span className="loading-spinner"></span> : <Save size={20} />}
-             {isSaving ? t('loading') : (isEditing ? t('saveChanges') : t('addItem'))}
+             {isSaving ? t('saving') : (isEditing ? t('saveChanges') : t('addItem'))}
           </button>
         </div>
       </form>

@@ -24,6 +24,6 @@
 ## Hardware Limitations
 - **Title**: Native Canvas EXIF Reorientation Fragmentation
 - **Affected Files**: `src/utils/imageUtils.js`
-- **Why It Matters**: While modern browsers explicitly respect EXIF tags natively when decoding buffers via `createImageBitmap({ imageOrientation: 'from-image' })`, severely outdated clients might ignore orientation properties silently when exporting `image/webp`.
+- **Why It Matters**: While modern browsers respect EXIF tags natively when decoding buffers via `createImageBitmap({ imageOrientation: 'from-image' })`, some outdated clients might ignore orientation properties silently when exporting `image/webp`.
 - **Recommended Next Step**: Wait for older hardware cycles to pass.
 - **Priority**: Low

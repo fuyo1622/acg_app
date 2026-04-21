@@ -2,11 +2,17 @@ export const COMPRESSION_CONFIG = {
   maxWidth: 1600,
   maxHeight: 1600,
   quality: 0.85,
-  preferredMimeType: 'image/webp'
+  preferredMimeType: 'image/webp',
+  minSizeToCompress: 1024 * 50 // 50 KB
 };
 
 export function compressImage(file) {
   if (!file || !(file instanceof Blob) || !file.type.startsWith('image/')) {
+    return Promise.resolve(file);
+  }
+
+  // Do not unnecessarily recompress very small images
+  if (file.size < COMPRESSION_CONFIG.minSizeToCompress) {
     return Promise.resolve(file);
   }
 
