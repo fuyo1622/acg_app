@@ -93,8 +93,8 @@ describe('Home smoke flows', () => {
   it('shows backup actions and wires import to the hidden file input', () => {
     renderHome();
 
-    expect(screen.getByTitle('Export Backup')).toBeEnabled();
-    const importButton = screen.getByTitle('Import Backup');
+    expect(screen.getByRole('button', { name: 'Export Backup' })).toBeEnabled();
+    const importButton = screen.getByRole('button', { name: 'Import Backup' });
     const importInput = screen.getByLabelText('Import backup file');
     const clickSpy = vi.spyOn(importInput, 'click').mockImplementation(() => {});
 

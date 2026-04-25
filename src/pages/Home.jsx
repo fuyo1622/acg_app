@@ -120,10 +120,10 @@ export default function Home() {
           </div>
           
           <div className="backup-actions" style={{ display: 'flex', gap: '0.5rem', marginLeft: '0.5rem' }}>
-             <button onClick={handleExport} disabled={isProcessing} className="btn-icon glass-panel" title={t('exportBackup')} style={{ padding: '0.5rem', border: 'none', background: 'var(--bg-card)', cursor: 'pointer', borderRadius: '8px' }}>
+             <button onClick={handleExport} disabled={isProcessing} className="btn-icon glass-panel" title={t('exportBackup')} aria-label={t('exportBackup')} style={{ padding: '0.5rem', border: 'none', background: 'var(--bg-card)', cursor: 'pointer', borderRadius: '8px' }}>
                <Download size={18} color="var(--text-main)" />
              </button>
-             <button onClick={triggerImport} disabled={isProcessing} className="btn-icon glass-panel" title={t('importBackup')} style={{ padding: '0.5rem', border: 'none', background: 'var(--bg-card)', cursor: 'pointer', borderRadius: '8px' }}>
+             <button onClick={triggerImport} disabled={isProcessing} className="btn-icon glass-panel" title={t('importBackup')} aria-label={t('importBackup')} style={{ padding: '0.5rem', border: 'none', background: 'var(--bg-card)', cursor: 'pointer', borderRadius: '8px' }}>
                <Upload size={18} color="var(--text-main)" />
              </button>
              <input type="file" accept=".json" aria-label="Import backup file" style={{ display: 'none' }} ref={fileInputRef} onChange={handleImport} />

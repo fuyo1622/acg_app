@@ -4,7 +4,7 @@
 - **JSON Payload Generation**: Separated explicitly decoupled pure logic boundaries (`backupUtils.js`) safely generating single-file offline structures.
 - **Micro-transaction Replacements**: Structured validation limits executing user confirm dialogs fully *before* forcing memory-intensive `fetch(dataURL)` Blob rehydrations synchronously overwriting (`replace`) DB columns securely.
 - **Asynchronous Compression**: Safely re-encoded RAW files through explicit Promise-based `compressImage` utilities dynamically resizing beneath `1600px`.
-- **Canvas Decoding**: Utilized `createImageBitmap` natively bypassing EXIF memory voids.
+- **Canvas Decoding**: Used `createImageBitmap` to preserve image orientation while reducing canvas decode risk.
 - **Double-submit Block**: Overhauled `<AddEditItem />` to disable redundant commits while canvas processing loads.
 - **Component Smoke Coverage**: Added Vitest/Testing Library checks for Home rendering, backup import controls, malformed import rejection, add-item submit behavior, and restored Blob-backed edit saves.
 

@@ -77,8 +77,11 @@ describe('AddEditItem smoke flows', () => {
     dbMocks.items.update.mockResolvedValue(1);
     dbMocks.items.get.mockResolvedValue(undefined);
     imageMocks.compressImage.mockImplementation((file) => Promise.resolve(file));
-    globalThis.URL.createObjectURL = vi.fn(() => 'blob:preview');
-    globalThis.URL.revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', {
+      ...globalThis.URL,
+      createObjectURL: vi.fn(() => 'blob:preview'),
+      revokeObjectURL: vi.fn(),
+    });
     vi.spyOn(window, 'alert').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mockLiveQueries();
@@ -87,6 +90,7 @@ describe('AddEditItem smoke flows', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
