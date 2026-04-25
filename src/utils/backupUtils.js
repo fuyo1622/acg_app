@@ -57,6 +57,10 @@ export function validateBackupPayload(payload, expectedVersion) {
       throw new Error(`Item at index ${index} is invalid`);
     }
 
+    if (item.id !== undefined && (!Number.isInteger(item.id) || item.id <= 0)) {
+      throw new Error(`Item at index ${index} has an invalid id`);
+    }
+
     if (
       (item.series !== undefined && typeof item.series !== 'string') || 
       (item.character !== undefined && typeof item.character !== 'string') || 

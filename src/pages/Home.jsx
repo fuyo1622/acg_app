@@ -48,7 +48,7 @@ export default function Home() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      alert(t('importError') + ' (Export Failed)');
+      alert(t('exportError'));
     } finally {
       setIsProcessing(false);
     }

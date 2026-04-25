@@ -5,7 +5,7 @@ import { BACKUP_VERSION } from './constants';
 describe('validateBackupPayload', () => {
   it('throws when payload format is completely broken', () => {
     expect(() => validateBackupPayload(null, BACKUP_VERSION)).toThrow('Payload is not an object');
-    expect(() => validateBackupPayload({ version: 999 }, BACKUP_VERSION)).toThrow('Unsupported backup version: 99');
+    expect(() => validateBackupPayload({ version: 999 }, BACKUP_VERSION)).toThrow('Unsupported backup version: 999');
     expect(() => validateBackupPayload({ version: BACKUP_VERSION }, BACKUP_VERSION)).toThrow('Backup items missing');
   });
 
