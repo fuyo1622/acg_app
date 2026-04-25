@@ -3,6 +3,8 @@
 ## Project Purpose
 This is a local-first web application designed for mobile devices. Its main goal is to allow users to catalog their ACG (Anime, Comic, Games) merchandise easily. The app provides a quick way to check your collection when shopping outdoors, preventing duplicate purchases by pairing photos with lightweight searchable metadata.
 
+For the canonical current project spec, start with `docs/project-spec.md`. This handoff is a practical companion focused on implementation context.
+
 ## Architecture & Stack
 - **Framework**: React 19 + Vite
 - **Routing**: React Router (`react-router-dom`)
@@ -33,14 +35,14 @@ This is a local-first web application designed for mobile devices. Its main goal
 - **Filter logic**: Decoupled from `Home.jsx` into pure util `filterUtils.js`. 
 - **Object URLs**: Refactored to manage memory lifecycles via `useObjectUrl.js` custom hook, designed to ensure `URL.revokeObjectURL()` fires when components unmount.
 - **Compression**: Asynchronous browser-native compression automatically runs via `imageUtils.js` capping max dimensions natively against uploaded files prior to IndexedDB writes.
-- **Backup & Restore**: Manual export boundaries decouple completely across pure helper payloads (`backupUtils.js`), routing heavy Base64 array parsing around `window.confirm` explicitly protecting destructive offline table merges natively.
-- **Testing**: Added a `vitest` suite for all extracted pure JS.
+- **Backup & Restore**: Manual export/import logic is organized in pure helper payload functions (`backupUtils.js`). Import validates the payload, asks for confirmation, rehydrates image Data URLs, and then replaces the local item table.
+- **Testing**: Added Vitest coverage for extracted pure JS utilities plus lightweight component smoke tests for Home and Add/Edit flows.
 
 ## What Was Intentionally Left Alone
 - **Dexie Schema**: Kept identical to prevent migration complexity. 
 - **web_crawler/**: Remained entirely outside the scope of this baseline fix, as it is non-core to the offline cataloging experience directly.
-- **Sync/Auth**: Still intentionally absent. The system is designed to be 100% offline-first.
+- **Sync/Auth**: Still intentionally absent. The system is designed around local-first offline use.
 
 ## Next Recommended Steps
-- Consider expanding the `useObjectUrl` capabilities into indexed DB blobs if user storage exceeds generic IndexedDB quotas on iOS devices.
-- Start incorporating lightweight component-level integration tests (`@testing-library/react`) beyond just the pure utilities when complexity increases.
+- Consider Dexie-level filtering or pagination if collection size makes full-table Home reads expensive.
+- Add focused component smoke tests for Item Detail and delete behavior when those areas change.

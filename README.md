@@ -1,11 +1,13 @@
 # ACG Merchandise Collector App
 
-A local-first, mobile Progressive Web Application (PWA) designed to catalog Anime, Comic, and Gaming merchandise offline. 
+A local-first, mobile Progressive Web Application (PWA) designed to catalog Anime, Comic, and Gaming merchandise offline.
+
+For the current canonical project spec, see [`docs/project-spec.md`](docs/project-spec.md).
 
 ## Features
-- **Client-Side Operations**: 100% Client-side operation using IndexedDB via Dexie.js for data retention without loading screens.
-- **Image Handling**: Capture and securely compress item photos automatically before storing them on your device.
-- **Offline Backup**: Export your entire collection as a single portable JSON file, and securely import it back to instantly overwrite onto any other local device setup flawlessly.
+- **Client-Side Operations**: Local client-side storage using IndexedDB via Dexie.js.
+- **Image Handling**: Capture or choose item photos and compress new image files before storing them on your device.
+- **Offline Backup**: Export your collection as a single portable JSON file, and import it back with a replace-style restore flow.
 - **Querying**: Multi-dimensional filtering attributes for searching specific owned items.
 - **Bilingual Context**: Switch dynamically between Traditional Chinese (`zh-TW`) and English.
 
@@ -24,12 +26,13 @@ A local-first, mobile Progressive Web Application (PWA) designed to catalog Anim
 5. **`npm test`**: Initiate internal logic regressions via Vitest.
 
 ## Limitations
-- Operates totally offline securely, so cross-device syncs natively do not function without third party integrations.
+- Operates locally without built-in cross-device sync. Moving data between devices currently requires manual export/import.
 - User imagery is compressed locally before storage in normal upload flows to reduce the database footprint, but overall storage can still grow with many photos. Native browser mechanisms are used for EXIF orientation handling, which may have edge cases on outdated devices.
 
 ## Documentation Reference
 Check the local `docs/` folder for comprehensive implementation records:
-- `handoff.md`: Primary reference manual.
+- `project-spec.md`: Canonical current project spec.
+- `handoff.md`: Practical reference manual for future agents/developers.
 - `architecture-decisions.md`: Extracted ADR history for storage & routing choices.
 - `open-issues-tech-debt.md`: Upcoming pipelines and testing enhancements.
 - `progress-summary.md`: Historical baseline stability records.
