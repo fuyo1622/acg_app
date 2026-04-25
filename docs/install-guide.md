@@ -43,8 +43,8 @@ ACG Collector can be installed as a Progressive Web App (PWA) from a supported m
 ### Icon Looks Wrong
 - Remove the installed app and add it again after the latest deployment finishes.
 - Clear the browser cache for the site if the old icon keeps appearing.
-- Confirm the deployed site serves `/favicon.svg`, `/pwa-192x192.jpg`, and `/pwa-512x512.jpg`.
-- TODO: add a true PNG Apple touch icon, ideally `/apple-touch-icon.png` at 180x180, when a suitable source asset is available. The current setup uses the existing 192x192 JPG icon rather than generating a new binary asset in this pass.
+- Confirm the deployed site serves `/favicon.svg`, `/apple-touch-icon.png`, `/pwa-192x192.jpg`, and `/pwa-512x512.jpg`.
+- The Apple touch icon is a 180x180 PNG derived from the existing PWA icon asset.
 
 ### App Opens in Browser Instead of Standalone
 - Remove the home screen shortcut and add it again from the production URL.

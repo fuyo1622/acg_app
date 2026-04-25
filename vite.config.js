@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg', 'pwa-192x192.jpg', 'pwa-512x512.jpg'],
+      includeAssets: ['favicon.svg', 'icons.svg', 'apple-touch-icon.png', 'pwa-192x192.jpg', 'pwa-512x512.jpg'],
       manifest: {
         name: 'ACG Collector',
         short_name: 'ACG',

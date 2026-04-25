@@ -79,7 +79,7 @@ The effective item shape used by the app is:
 - Android installation is through the browser install prompt or **Add to Home screen** / **Install app** browser menu action.
 - iOS installation uses Safari's **Add to Home Screen** flow.
 - Installability depends on production HTTPS hosting, a valid web app manifest, generated service worker files, and browser-specific install criteria.
-- The current iOS touch icon points to an existing 192x192 JPG asset. A future asset pass should add a true 180x180 PNG Apple touch icon when a suitable source asset is available.
+- The iOS touch icon is `public/apple-touch-icon.png`, a 180x180 PNG derived from the existing PWA icon asset.
 - The current Vite config does not set `base`. This is suitable for root deployments. If the app is deployed to GitHub Pages under `/acg_app/`, `base: '/acg_app/'` may be needed, but the deployment target should be confirmed before changing it.
 
 ## Image handling behavior

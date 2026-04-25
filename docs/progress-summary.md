@@ -11,6 +11,7 @@ For current Android/iOS installation steps and manual PWA checks, see `docs/inst
 - **Double-submit Block**: Overhauled `<AddEditItem />` to disable redundant commits while canvas processing loads.
 - **Component Smoke Coverage**: Added Vitest/Testing Library checks for Home rendering, backup import controls, malformed import rejection, add-item submit behavior, and restored Blob-backed edit saves.
 - **PWA Install Documentation**: Added installability metadata cleanup and Android/iOS installation guidance with manual verification checks.
+- **iOS Touch Icon**: Added a 180x180 PNG Apple touch icon derived from the existing PWA icon asset.
 
 ## Previous State
 - App had inconsistent validation behavior mixing HTML `required` attributes and JavaScript error alerts.
