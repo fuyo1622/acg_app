@@ -126,7 +126,7 @@ export default function Home() {
              <button onClick={triggerImport} disabled={isProcessing} className="btn-icon glass-panel" title={t('importBackup')} style={{ padding: '0.5rem', border: 'none', background: 'var(--bg-card)', cursor: 'pointer', borderRadius: '8px' }}>
                <Upload size={18} color="var(--text-main)" />
              </button>
-             <input type="file" accept=".json" style={{ display: 'none' }} ref={fileInputRef} onChange={handleImport} />
+             <input type="file" accept=".json" aria-label="Import backup file" style={{ display: 'none' }} ref={fileInputRef} onChange={handleImport} />
           </div>
         </div>
         

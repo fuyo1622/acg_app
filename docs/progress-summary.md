@@ -6,6 +6,7 @@
 - **Asynchronous Compression**: Safely re-encoded RAW files through explicit Promise-based `compressImage` utilities dynamically resizing beneath `1600px`.
 - **Canvas Decoding**: Utilized `createImageBitmap` natively bypassing EXIF memory voids.
 - **Double-submit Block**: Overhauled `<AddEditItem />` to disable redundant commits while canvas processing loads.
+- **Component Smoke Coverage**: Added Vitest/Testing Library checks for Home rendering, backup import controls, malformed import rejection, add-item submit behavior, and restored Blob-backed edit saves.
 
 ## Previous State
 - App had inconsistent validation behavior mixing HTML `required` attributes and JavaScript error alerts.
@@ -27,12 +28,12 @@
 - **README Updates**: Complete.
 
 ## Remaining Items & Unfinished Elements
-- Vitest Component-level integration coverage is still sparse, targeting pure business logic right now.
+- Vitest Component-level integration coverage now covers the highest-risk add/edit and backup smoke paths, but still avoids full browser/E2E workflows.
 - `web_crawler/` logic usage wasn’t formally integrated.
 
 ## Latest Verification
 - `npm run lint`: 0 errors.
-- `npm test`: 3 test suites, 13 specs covering fallback mock environments.
+- `npm test`: Covers pure utilities plus page-level smoke flows for Home and Add/Edit.
 - `npm run build`: Bundled correctly (approx 4.5s).
 
 ## Overall Confidence
