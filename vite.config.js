@@ -9,14 +9,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.svg', 'icons.svg', 'pwa-192x192.jpg', 'pwa-512x512.jpg'],
       manifest: {
         name: 'ACG Collector',
         short_name: 'ACG',
         description: 'Personal Collector app for Anime, Comics, and Games merchandise.',
+        start_url: '.',
+        scope: '.',
+        display: 'standalone',
         theme_color: '#0f1115',
         background_color: '#0f1115',
-        display: 'standalone',
         icons: [
           {
             src: 'pwa-192x192.jpg',

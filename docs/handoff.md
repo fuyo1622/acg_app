@@ -3,7 +3,7 @@
 ## Project Purpose
 This is a local-first web application designed for mobile devices. Its main goal is to allow users to catalog their ACG (Anime, Comic, Games) merchandise easily. The app provides a quick way to check your collection when shopping outdoors, preventing duplicate purchases by pairing photos with lightweight searchable metadata.
 
-For the canonical current project spec, start with `docs/project-spec.md`. This handoff is a practical companion focused on implementation context.
+For the canonical current project spec, start with `docs/project-spec.md`. For Android/iOS installation instructions, see `docs/install-guide.md`. This handoff is a practical companion focused on implementation context.
 
 ## Architecture & Stack
 - **Framework**: React 19 + Vite
@@ -11,6 +11,12 @@ For the canonical current project spec, start with `docs/project-spec.md`. This 
 - **Storage**: IndexedDB managed via Dexie.js (`dexie` + `dexie-react-hooks`)
 - **PWA**: `vite-plugin-pwa` for offline caching and installation capabilities
 - **Design System**: Vanilla CSS with modern standard custom properties
+
+## PWA Install Notes
+- `vite.config.js` defines the generated manifest and service worker behavior through `vite-plugin-pwa`.
+- `index.html` contains the favicon, theme color, and iOS home screen metadata.
+- The current Vite config does not set `base`. Keep that for root deployments; consider `base: '/acg_app/'` only if the confirmed production target is GitHub Pages under that subpath.
+- Manual Android/iOS install checks are listed in `docs/install-guide.md`.
 
 ## Core App Flows
 - **Home (`/`)**: Displays the collection as a grid, handles multi-dimensional filtering (text search, series dropdown, character dropdown, type dropdown), and provides language switching.

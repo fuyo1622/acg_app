@@ -2,12 +2,13 @@
 
 A local-first, mobile Progressive Web Application (PWA) designed to catalog Anime, Comic, and Gaming merchandise offline.
 
-For the current canonical project spec, see [`docs/project-spec.md`](docs/project-spec.md).
+For the current canonical project spec, see [`docs/project-spec.md`](docs/project-spec.md). For mobile installation steps, see [`docs/install-guide.md`](docs/install-guide.md).
 
 ## Features
 - **Client-Side Operations**: Local client-side storage using IndexedDB via Dexie.js.
 - **Image Handling**: Capture or choose item photos and compress new image files before storing them on your device.
 - **Offline Backup**: Export your collection as a single portable JSON file, and import it back with a replace-style restore flow.
+- **Installable PWA**: Install from supported mobile browsers for home screen access.
 - **Querying**: Multi-dimensional filtering attributes for searching specific owned items.
 - **Bilingual Context**: Switch dynamically between Traditional Chinese (`zh-TW`) and English.
 
@@ -32,6 +33,7 @@ For the current canonical project spec, see [`docs/project-spec.md`](docs/projec
 ## Documentation Reference
 Check the local `docs/` folder for comprehensive implementation records:
 - `project-spec.md`: Canonical current project spec.
+- `install-guide.md`: Android Chrome and iOS Safari PWA installation guide.
 - `handoff.md`: Practical reference manual for future agents/developers.
 - `architecture-decisions.md`: Extracted ADR history for storage & routing choices.
 - `open-issues-tech-debt.md`: Upcoming pipelines and testing enhancements.

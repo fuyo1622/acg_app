@@ -1,6 +1,7 @@
 # ACG App Progress Summary
 
 For the canonical current project spec, see `docs/project-spec.md`. This file remains a historical progress summary.
+For current Android/iOS installation steps and manual PWA checks, see `docs/install-guide.md`.
 
 ## Recent Additions (Backup & Restore Pipelines)
 - **JSON Payload Generation**: Separated pure logic boundaries (`backupUtils.js`) for generating single-file offline backup structures.
@@ -9,6 +10,7 @@ For the canonical current project spec, see `docs/project-spec.md`. This file re
 - **Canvas Decoding**: Used `createImageBitmap` to preserve image orientation while reducing canvas decode risk.
 - **Double-submit Block**: Overhauled `<AddEditItem />` to disable redundant commits while canvas processing loads.
 - **Component Smoke Coverage**: Added Vitest/Testing Library checks for Home rendering, backup import controls, malformed import rejection, add-item submit behavior, and restored Blob-backed edit saves.
+- **PWA Install Documentation**: Added installability metadata cleanup and Android/iOS installation guidance with manual verification checks.
 
 ## Previous State
 - App had inconsistent validation behavior mixing HTML `required` attributes and JavaScript error alerts.

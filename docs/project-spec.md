@@ -12,6 +12,7 @@ The current product is an offline-capable MVP focused on manual collection manag
 
 ## Current feature set
 - PWA shell built with React 19 and Vite.
+- Installable PWA metadata and service worker generation through `vite-plugin-pwa`.
 - Local IndexedDB persistence through Dexie.
 - Home gallery view with item cards.
 - Search by series, character, or notes.
@@ -73,6 +74,14 @@ The effective item shape used by the app is:
 - Home currently reads the item table into an array before client-side search and filtering, which is practical for the MVP but may need pagination or Dexie-level filtering for larger collections.
 - PWA caching supports offline app loading, but data durability still depends on the browser retaining site storage.
 
+## PWA installability behavior
+- The app is intended to be installable as a PWA from supported mobile browsers.
+- Android installation is through the browser install prompt or **Add to Home screen** / **Install app** browser menu action.
+- iOS installation uses Safari's **Add to Home Screen** flow.
+- Installability depends on production HTTPS hosting, a valid web app manifest, generated service worker files, and browser-specific install criteria.
+- The current iOS touch icon points to an existing 192x192 JPG asset. A future asset pass should add a true 180x180 PNG Apple touch icon when a suitable source asset is available.
+- The current Vite config does not set `base`. This is suitable for root deployments. If the app is deployed to GitHub Pages under `/acg_app/`, `base: '/acg_app/'` may be needed, but the deployment target should be confirmed before changing it.
+
 ## Image handling behavior
 - New image selections pass through `compressImage` before storage when the selected photo is a `File`.
 - Compression skips non-image inputs and small files below the configured threshold.
@@ -111,6 +120,7 @@ The effective item shape used by the app is:
 ## Documentation map
 - `docs/project-spec.md`: Canonical current project spec.
 - `README.md`: Entry point with feature summary, commands, and doc links.
+- `docs/install-guide.md`: User-facing Android/iOS installation steps and manual PWA verification checklist.
 - `docs/handoff.md`: Practical handoff for future agents/developers.
 - `docs/architecture-decisions.md`: Historical architecture decisions and tradeoffs.
 - `docs/open-issues-tech-debt.md`: Known technical debt and future risk areas.
