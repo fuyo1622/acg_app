@@ -4,11 +4,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
+import MultiSelectCombobox from '../components/MultiSelectCombobox';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_TYPES } from '../utils/constants';
 import { validateItem } from '../utils/validationUtils';
 import { getUniqueValues } from '../utils/filterUtils';
 import { compressImage } from '../utils/imageUtils';
+import { toValueArray } from '../utils/valueUtils';
 import './AddEditItem.css';
 
 export default function AddEditItem() {
@@ -18,8 +20,8 @@ export default function AddEditItem() {
   const isEditing = !!id;
 
   const [formData, setFormData] = useState({
-    series: '',
-    character: '',
+    series: [],
+    character: [],
     merchandise_type: '', // Empty means nothing selected yet
     notes: '',
   });
@@ -46,8 +48,8 @@ export default function AddEditItem() {
         }
 
         setFormData({
-          series: item.series,
-          character: item.character,
+          series: toValueArray(item.series),
+          character: toValueArray(item.character),
           merchandise_type: mType,
           notes: item.notes || '',
         });
@@ -62,6 +64,10 @@ export default function AddEditItem() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleMultiValueChange = (name, values) => {
+    setFormData(prev => ({ ...prev, [name]: values }));
   };
 
   const handleImageSelected = (file) => {
@@ -148,36 +154,30 @@ export default function AddEditItem() {
         
         <div className="form-group">
           <label htmlFor="series">{t('seriesFranchise')}</label>
-          <input 
-            type="text" 
-            id="series" 
-            name="series" 
-            list="series-list"
-            value={formData.series} 
-            onChange={handleChange} 
+          <MultiSelectCombobox
+            id="series"
+            label={t('seriesFranchise')}
+            value={formData.series}
+            options={uniqueSeries}
+            onChange={(values) => handleMultiValueChange('series', values)}
             placeholder={t('seriesPlaceholder')}
-            autoComplete="off"
+            addLabel={t('addMultiValue')}
+            removeLabel={t('removeMultiValue')}
           />
-          <datalist id="series-list">
-            {uniqueSeries.map(s => <option key={s} value={s} />)}
-          </datalist>
         </div>
 
         <div className="form-group">
           <label htmlFor="character">{t('character')}</label>
-          <input 
-            type="text" 
-            id="character" 
-            name="character" 
-            list="character-list"
-            value={formData.character} 
-            onChange={handleChange} 
+          <MultiSelectCombobox
+            id="character"
+            label={t('character')}
+            value={formData.character}
+            options={uniqueCharacters}
+            onChange={(values) => handleMultiValueChange('character', values)}
             placeholder={t('characterPlaceholder')}
-            autoComplete="off"
+            addLabel={t('addMultiValue')}
+            removeLabel={t('removeMultiValue')}
           />
-          <datalist id="character-list">
-            {uniqueCharacters.map(c => <option key={c} value={c} />)}
-          </datalist>
         </div>
 
         <div className="form-group">

@@ -1,4 +1,5 @@
 import { DEFAULT_TYPES } from './constants';
+import { toValueArray } from './valueUtils';
 
 export function filterItems({ items, searchTerm, filterType, filterSeries, filterCharacter }) {
   if (!items) return [];
@@ -6,14 +7,16 @@ export function filterItems({ items, searchTerm, filterType, filterSeries, filte
   const searchLower = (searchTerm || '').toLowerCase();
 
   return items.filter(item => {
+    const seriesValues = toValueArray(item.series);
+    const characterValues = toValueArray(item.character);
     const matchesSearch = 
-      (item.series || '').toLowerCase().includes(searchLower) ||
-      (item.character || '').toLowerCase().includes(searchLower) ||
+      seriesValues.some(value => value.toLowerCase().includes(searchLower)) ||
+      characterValues.some(value => value.toLowerCase().includes(searchLower)) ||
       (item.notes || '').toLowerCase().includes(searchLower);
     
     const matchesType = filterType === 'all' || item.merchandise_type === filterType;
-    const matchesSeries = filterSeries === 'all' || item.series === filterSeries;
-    const matchesCharacter = filterCharacter === 'all' || item.character === filterCharacter;
+    const matchesSeries = filterSeries === 'all' || seriesValues.includes(filterSeries);
+    const matchesCharacter = filterCharacter === 'all' || characterValues.includes(filterCharacter);
     
     return matchesSearch && matchesType && matchesSeries && matchesCharacter;
   });
@@ -24,8 +27,8 @@ export function getUniqueValues(items) {
   if (!items) return { uniqueSeries: [], uniqueCharacters: [], uniqueCustomTypes: [] };
   
   const uniqueCustomTypes = [...new Set(items.map(i => i.merchandise_type).filter(v => v && !DEFAULT_TYPES.includes(v)))];
-  const uniqueSeries = [...new Set(items.map(i => i.series).filter(Boolean))];
-  const uniqueCharacters = [...new Set(items.map(i => i.character).filter(Boolean))];
+  const uniqueSeries = [...new Set(items.flatMap(i => toValueArray(i.series)))];
+  const uniqueCharacters = [...new Set(items.flatMap(i => toValueArray(i.character)))];
 
   return { uniqueSeries, uniqueCharacters, uniqueCustomTypes };
 }

@@ -4,12 +4,13 @@ import { db } from '../services/db';
 import { ArrowLeft, Edit2, MessageSquare, ImageOff } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
+import { formatValues } from '../utils/valueUtils';
 import './AddEditItem.css'; // Reusing some base styles
 
 export default function ItemDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const item = useLiveQuery(
     () => db.items.get(parseInt(id))
@@ -19,6 +20,10 @@ export default function ItemDetail() {
 
   if (item === undefined) return <div className="loading">{t('loading')}</div>;
   if (item === null) return <div className="loading">{t('noItemsFound')}</div>;
+
+  const separator = lang === 'en' ? ', ' : '、';
+  const characterText = formatValues(item.character, separator);
+  const seriesText = formatValues(item.series, separator);
 
   return (
     <div className="item-detail-page">
@@ -33,7 +38,7 @@ export default function ItemDetail() {
 
       <div className="detail-image-container glass-panel">
         {url ? (
-          <img src={url} alt={item.character || item.series} />
+          <img src={url} alt={characterText || seriesText} />
         ) : (
           <div className="empty-state">
             <div className="empty-icon glass-panel">
@@ -47,8 +52,8 @@ export default function ItemDetail() {
       <div className="detail-info glass-panel">
         <div className="detail-header">
           <div>
-            <h1>{item.character || t('unknownCharacter')}</h1>
-            <h2 className="series" style={{ color: 'var(--text-muted)' }}>{item.series || t('unknownSeries')}</h2>
+            <h1>{characterText || t('unknownCharacter')}</h1>
+            <h2 className="series" style={{ color: 'var(--text-muted)' }}>{seriesText || t('unknownSeries')}</h2>
           </div>
           <span className="detail-badge">{t(item.merchandise_type)}</span>
         </div>

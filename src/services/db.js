@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { toValueArray } from '../utils/valueUtils';
 
 export const db = new Dexie('acg-merch-db');
 
@@ -8,3 +9,10 @@ db.version(1).stores({
   // other keys are indexed for filtering
   items: '++id, series, character, merchandise_type, created_at, updated_at'
 });
+
+db.version(2).stores({
+  items: '++id, *series, *character, merchandise_type, created_at, updated_at'
+}).upgrade(transaction => transaction.table('items').toCollection().modify(item => {
+  item.series = toValueArray(item.series);
+  item.character = toValueArray(item.character);
+}));

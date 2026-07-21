@@ -1,6 +1,8 @@
+import { toValueArray } from './valueUtils';
+
 export function validateItem(formData) {
-  const isSeriesEmpty = !formData.series || formData.series.trim() === '';
-  const isCharacterEmpty = !formData.character || formData.character.trim() === '';
+  const isSeriesEmpty = toValueArray(formData.series).length === 0;
+  const isCharacterEmpty = toValueArray(formData.character).length === 0;
   
   if (isSeriesEmpty && isCharacterEmpty) {
     return {

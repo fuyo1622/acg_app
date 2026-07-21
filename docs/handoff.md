@@ -20,7 +20,7 @@ For the canonical current project spec, start with `docs/project-spec.md`. For A
 
 ## Core App Flows
 - **Home (`/`)**: Displays the collection as a grid, handles multi-dimensional filtering (text search, series dropdown, character dropdown, type dropdown), and provides language switching.
-- **Add/Edit Item (`/add`, `/edit/:id`)**: Form capturing item details including photo (via camera/gallery), series, character, type, and optional notes.
+- **Add/Edit Item (`/add`, `/edit/:id`)**: Form capturing item details including photo (via camera/gallery), multi-value series and characters with filtered in-form dropdowns, type, and optional notes.
 - **Item Detail (`/item/:id`)**: Full-screen view of a specific merchandise item's photo and exact details.
 
 ## Important Files

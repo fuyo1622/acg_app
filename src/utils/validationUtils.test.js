@@ -18,6 +18,15 @@ describe('validateItem', () => {
     expect(result.isValid).toBe(true);
   });
 
+  it('supports multiple series and characters', () => {
+    const result = validateItem({
+      series: ['Evangelion', 'Rebuild of Evangelion'],
+      character: ['Asuka', 'Rei'],
+      merchandise_type: 'figure',
+    });
+    expect(result.isValid).toBe(true);
+  });
+
   it('fails if merchandise type is missing or __custom__', () => {
     const missingType = validateItem({ series: 'A', character: 'B', merchandise_type: '' });
     expect(missingType.isValid).toBe(false);

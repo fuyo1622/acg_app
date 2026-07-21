@@ -1,9 +1,11 @@
+import { toValueArray } from './valueUtils';
+
 export async function serializeBackupItems(items) {
   return Promise.all(items.map(async (item) => {
     const serialized = {
       id: item.id,
-      series: item.series || '',
-      character: item.character || '',
+      series: toValueArray(item.series),
+      character: toValueArray(item.character),
       merchandise_type: item.merchandise_type || '',
       notes: item.notes || '',
       created_at: item.created_at ? item.created_at.toISOString() : null,
@@ -45,7 +47,7 @@ export function validateBackupPayload(payload, expectedVersion) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Payload is not an object');
   }
-  if (payload.version !== expectedVersion) {
+  if (!Number.isInteger(payload.version) || payload.version < 1 || payload.version > expectedVersion) {
     throw new Error(`Unsupported backup version: ${payload.version}`);
   }
   if (!Array.isArray(payload.items)) {
@@ -62,17 +64,15 @@ export function validateBackupPayload(payload, expectedVersion) {
     }
 
     if (
-      (item.series !== undefined && typeof item.series !== 'string') || 
-      (item.character !== undefined && typeof item.character !== 'string') || 
+      (item.series !== undefined && typeof item.series !== 'string' && !(Array.isArray(item.series) && item.series.every(value => typeof value === 'string'))) ||
+      (item.character !== undefined && typeof item.character !== 'string' && !(Array.isArray(item.character) && item.character.every(value => typeof value === 'string'))) ||
       (item.merchandise_type !== undefined && typeof item.merchandise_type !== 'string') || 
       (item.notes !== undefined && typeof item.notes !== 'string')
     ) {
       throw new Error(`Item at index ${index} contains invalid string definitions`);
     }
 
-    const seriesValue = item.series || '';
-    const charValue = item.character || '';
-    if (!seriesValue.trim() && !charValue.trim()) {
+    if (toValueArray(item.series).length === 0 && toValueArray(item.character).length === 0) {
       throw new Error(`Item at index ${index} must have at least one of series or character`);
     }
 
@@ -100,6 +100,8 @@ export function validateBackupPayload(payload, expectedVersion) {
 export async function rehydrateBackupItems(items) {
   return Promise.all(items.map(async (item) => {
     const rehydrated = { ...item };
+    rehydrated.series = toValueArray(rehydrated.series);
+    rehydrated.character = toValueArray(rehydrated.character);
     
     if (rehydrated.created_at) rehydrated.created_at = new Date(rehydrated.created_at);
     if (rehydrated.updated_at) rehydrated.updated_at = new Date(rehydrated.updated_at);

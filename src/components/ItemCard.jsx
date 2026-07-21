@@ -1,11 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
+import { formatValues } from '../utils/valueUtils';
 
 export default function ItemCard({ item }) {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const imageUrl = useObjectUrl(item.photo);
+  const separator = lang === 'en' ? ', ' : '、';
+  const characterText = formatValues(item.character, separator);
+  const seriesText = formatValues(item.series, separator);
 
   return (
     <div 
@@ -14,15 +18,15 @@ export default function ItemCard({ item }) {
     >
       <div className="image-container">
         {item.photo ? (
-          <img src={imageUrl} alt={item.character || item.series} loading="lazy" />
+          <img src={imageUrl} alt={characterText || seriesText} loading="lazy" />
         ) : (
           <div className="no-image">{t('noPhoto')}</div>
         )}
         <div className="item-badge">{t(item.merchandise_type)}</div>
       </div>
       <div className="item-info">
-        <h3>{item.character || t('unknownCharacter')}</h3>
-        <p className="series">{item.series || t('unknownSeries')}</p>
+        <h3>{characterText || t('unknownCharacter')}</h3>
+        <p className="series">{seriesText || t('unknownSeries')}</p>
       </div>
     </div>
   );

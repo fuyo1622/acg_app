@@ -4,6 +4,8 @@ A local-first, mobile Progressive Web Application (PWA) designed to catalog Anim
 
 For the current canonical project spec, see [`docs/project-spec.md`](docs/project-spec.md). For mobile installation steps, see [`docs/install-guide.md`](docs/install-guide.md).
 
+For the current Traditional Chinese iPhone/Vercel deployment and hands-on test procedure, see [`docs/iphone-vercel-testing-guide.zh-TW.md`](docs/iphone-vercel-testing-guide.zh-TW.md).
+
 ## Features
 - **Client-Side Operations**: Local client-side storage using IndexedDB via Dexie.js.
 - **Image Handling**: Capture or choose item photos and compress new image files before storing them on your device.
@@ -34,6 +36,7 @@ For the current canonical project spec, see [`docs/project-spec.md`](docs/projec
 Check the local `docs/` folder for comprehensive implementation records:
 - `project-spec.md`: Canonical current project spec.
 - `install-guide.md`: Android Chrome and iOS Safari PWA installation guide.
+- `iphone-vercel-testing-guide.zh-TW.md`: Traditional Chinese Vercel deployment, iPhone installation, and stage acceptance test guide.
 - `handoff.md`: Practical reference manual for future agents/developers.
 - `architecture-decisions.md`: Extracted ADR history for storage & routing choices.
 - `open-issues-tech-debt.md`: Upcoming pipelines and testing enhancements.

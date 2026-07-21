@@ -50,17 +50,17 @@ The current product is an offline-capable MVP focused on manual collection manag
 ## Data model overview
 The current IndexedDB database is named `acg-merch-db` and is defined in `src/services/db.js`.
 
-Dexie schema version 1 contains a single `items` table:
+Dexie schema version 2 contains a single `items` table. Version 1 string values are migrated automatically:
 
 ```text
-++id, series, character, merchandise_type, created_at, updated_at
+++id, *series, *character, merchandise_type, created_at, updated_at
 ```
 
 The effective item shape used by the app is:
 
 - `id`: auto-incremented primary key.
-- `series`: string, optional as long as `character` is present.
-- `character`: string, optional as long as `series` is present.
+- `series`: array of strings, optional as long as `character` contains a value.
+- `character`: array of strings, optional as long as `series` contains a value.
 - `merchandise_type`: required string, usually one of the default types or a user-entered custom type.
 - `notes`: optional string.
 - `photo`: optional Blob/File-like image payload stored in IndexedDB.

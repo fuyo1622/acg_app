@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateBackupPayload } from './backupUtils';
+import { rehydrateBackupItems, serializeBackupItems, validateBackupPayload } from './backupUtils';
 import { BACKUP_VERSION } from './constants';
 
 describe('validateBackupPayload', () => {
@@ -48,5 +48,33 @@ describe('validateBackupPayload', () => {
       ]
     };
     expect(validateBackupPayload(payload, BACKUP_VERSION)).toBe(true);
+  });
+
+  it('accepts legacy version 1 strings and rehydrates them as arrays', async () => {
+    const payload = {
+      version: 1,
+      items: [
+        { series: 'Evangelion', character: 'Asuka', merchandise_type: 'figure', notes: '', photo: null },
+      ],
+    };
+
+    expect(validateBackupPayload(payload, BACKUP_VERSION)).toBe(true);
+    await expect(rehydrateBackupItems(payload.items)).resolves.toEqual([
+      expect.objectContaining({ series: ['Evangelion'], character: ['Asuka'] }),
+    ]);
+  });
+
+  it('serializes multiple series and characters as arrays', async () => {
+    const serialized = await serializeBackupItems([{
+      id: 1,
+      series: ['Evangelion', 'Rebuild of Evangelion'],
+      character: ['Asuka', 'Rei'],
+      merchandise_type: 'figure',
+    }]);
+
+    expect(serialized[0]).toEqual(expect.objectContaining({
+      series: ['Evangelion', 'Rebuild of Evangelion'],
+      character: ['Asuka', 'Rei'],
+    }));
   });
 });

@@ -59,6 +59,8 @@ export const translations = {
     tapToChange: 'Tap to change',
     typeToSearch: 'Type to search or add...',
     addSelfDefinedType: 'Add self-defined type...',
+    addMultiValue: 'Add "{value}"',
+    removeMultiValue: 'Remove {value}',
     allSeries: 'All Series',
     allCharacters: 'All Characters',
   },
@@ -119,6 +121,8 @@ export const translations = {
     tapToChange: '點擊更換',
     typeToSearch: '直接輸入來搜尋或新增...',
     addSelfDefinedType: '新增自訂類型...',
+    addMultiValue: '新增「{value}」',
+    removeMultiValue: '移除 {value}',
     allSeries: '所有系列',
     allCharacters: '所有角色',
   }

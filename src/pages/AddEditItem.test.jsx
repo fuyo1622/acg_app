@@ -69,6 +69,13 @@ function mockLiveQueries({ allItems = [], editItemQuery } = {}) {
   });
 }
 
+function addNewMultiValue(label, value) {
+  fireEvent.change(screen.getByRole('combobox', { name: label }), {
+    target: { value },
+  });
+  fireEvent.click(screen.getByRole('option', { name: `Add "${value}"` }));
+}
+
 describe('AddEditItem smoke flows', () => {
   beforeEach(() => {
     localStorage.setItem('appLang', 'en');
@@ -108,9 +115,7 @@ describe('AddEditItem smoke flows', () => {
     expect(window.alert).toHaveBeenCalledWith('Please enter at least a series or character.');
     expect(dbMocks.items.add).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText('Series / Franchise'), {
-      target: { value: 'Neon Genesis Evangelion' },
-    });
+    addNewMultiValue('Series / Franchise', 'Neon Genesis Evangelion');
     fireEvent.change(screen.getByLabelText('Merchandise Type'), {
       target: { value: 'figure' },
     });
@@ -118,8 +123,8 @@ describe('AddEditItem smoke flows', () => {
 
     await waitFor(() => {
       expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({
-        series: 'Neon Genesis Evangelion',
-        character: '',
+        series: ['Neon Genesis Evangelion'],
+        character: [],
         merchandise_type: 'figure',
         notes: '',
         photo: null,
@@ -145,15 +150,15 @@ describe('AddEditItem smoke flows', () => {
 
     const { container } = renderForm();
 
-    await screen.findByDisplayValue('Imported Series');
-    expect(screen.getByDisplayValue('Imported Character')).toBeInTheDocument();
+    expect(await screen.findByText('Imported Series')).toBeInTheDocument();
+    expect(screen.getByText('Imported Character')).toBeInTheDocument();
 
     fireEvent.submit(container.querySelector('form'));
 
     await waitFor(() => {
       expect(dbMocks.items.update).toHaveBeenCalledWith(7, expect.objectContaining({
-        series: 'Imported Series',
-        character: 'Imported Character',
+        series: ['Imported Series'],
+        character: ['Imported Character'],
         merchandise_type: 'figure',
         notes: 'Restored from backup',
         photo: restoredPhoto,
@@ -161,5 +166,40 @@ describe('AddEditItem smoke flows', () => {
     });
     expect(compressImage).not.toHaveBeenCalled();
     expect(routerMocks.navigate).toHaveBeenCalledWith(-1);
+  });
+
+  it('shows matching options in the dropdown and saves multiple selected values', async () => {
+    mockLiveQueries({
+      allItems: [
+        { series: ['Neon Genesis Evangelion'], character: ['Asuka'], merchandise_type: 'figure' },
+        { series: ['Evangelion: 3.0+1.0'], character: ['Rei'], merchandise_type: 'figure' },
+        { series: ['Gundam'], character: ['Char'], merchandise_type: 'figure' },
+      ],
+    });
+
+    const { container } = renderForm();
+    const seriesInput = screen.getByRole('combobox', { name: 'Series / Franchise' });
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    fireEvent.change(seriesInput, { target: { value: 'eva' } });
+
+    expect(screen.getByRole('option', { name: 'Neon Genesis Evangelion' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Evangelion: 3.0+1.0' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Gundam' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: 'Neon Genesis Evangelion' }));
+    fireEvent.change(seriesInput, { target: { value: '3.0' } });
+    fireEvent.click(screen.getByRole('option', { name: 'Evangelion: 3.0+1.0' }));
+    fireEvent.change(screen.getByLabelText('Merchandise Type'), {
+      target: { value: 'figure' },
+    });
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => {
+      expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({
+        series: ['Neon Genesis Evangelion', 'Evangelion: 3.0+1.0'],
+        character: [],
+      }));
+    });
   });
 });
