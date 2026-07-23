@@ -33,17 +33,18 @@
 - [x] 第一版以公開 PWA／Vercel 為暫定目標。
 - [ ] 決定並綁定長期使用的 production domain。
 - [x] 確認同時公開原始碼 repository。
+- [ ] 將 GitHub repository visibility 由 Private 改成 Public；目前等待 repository 擁有者登入 GitHub。
 - [x] 選擇 MIT 原始碼授權。
 - [x] 以 GitHub 帳號 `fuyo1622` 作為著作權人名稱並加入 `LICENSE`。
 - [x] 第一版暫不上架 App Store／Google Play。
 - [x] 加入 Vercel SPA rewrite，避免直接開啟 `/item/...`、`/edit/...`、`/privacy` 時出現 404。
 - [x] 加入 production security headers 與合理的快取規則。
-- [ ] 確認正式部署不需要 Vite 子路徑 `base`；若使用 GitHub Pages 子路徑則另行調整。
+- [x] 目前正式部署目標為 Vercel 根路徑，不設定 Vite 子路徑 `base`。
 
 ### 素材與權利
 
 - [x] 移除 Kadokawa 商品圖片、測試資料與非核心爬蟲。
-- [ ] 將已移除的第三方圖片從公開 Git 歷史清除；這需要另行確認後執行 history rewrite。
+- [x] 重寫 `main` 並強制更新遠端，讓第三方圖片 blob 不再能從公開分支歷史到達。
 - [x] 以原創幾何品牌圖示替換現有含浮水印的 PWA／Apple 圖示。
 - [x] 產生真正的 192×192、512×512、maskable 512×512 與 Apple 180×180 PNG。
 - [x] 確認所有圖示 MIME、實際尺寸與 manifest 宣告一致。
@@ -109,10 +110,13 @@
 1. 正式 production domain。
 2. 是否要將 MIT `LICENSE` 中的 `fuyo1622` 改成真實姓名或其他法律實體名稱。
 3. Git 歷史重寫完成後，協作者需要重新 clone 或重設本機分支。
+4. Repository 擁有者需登入 GitHub，才能完成 visibility 變更。
+5. 是否允許執行線上 npm audit，將套件名稱與版本送往 npm registry 取得最新 advisory。
 
 ## 2026-07-23 P0 執行紀錄
 
-- 移除目前工作樹中的第三方商品圖、爬蟲與未使用素材；尚未重寫 Git 歷史。
+- 移除目前工作樹中的第三方商品圖、爬蟲與未使用素材。
+- 建立完整 Git bundle 備份後重寫 `main`；舊商品圖 blob 不再能從新 `main` 到達，並以 `--force-with-lease` 更新遠端。
 - 以可重複產生的原創幾何圖示替換 PWA、maskable、Apple touch 與 favicon 素材。
 - 加入 Vercel SPA rewrite、CSP、HSTS、Permissions Policy 及其他安全標頭。
 - 移除 Google Fonts runtime 請求及開放式 Vite host 設定。
