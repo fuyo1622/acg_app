@@ -15,7 +15,7 @@
 
 ## 稽核摘要
 
-目前核心功能可以正常建置及測試，但原始狀態不適合直接公開。主要阻擋是第三方商品圖片、App 圖示權利、缺少正式授權、正式網域尚未決定，以及公開環境的部署、安全與隱私文件尚未完整。
+核心功能已完成 P0 公開整理，並部署至 Vercel Hobby 的正式 HTTPS 網址：<https://acg-app-steel.vercel.app/>。
 
 已確認的品質基線：
 
@@ -31,7 +31,7 @@
 ### 發佈與部署
 
 - [x] 第一版以公開 PWA／Vercel 為暫定目標。
-- [ ] 決定並綁定長期使用的 production domain。
+- [x] 第一版 production domain 使用 Vercel Hobby 免費網域：<https://acg-app-steel.vercel.app/>。
 - [x] 確認同時公開原始碼 repository。
 - [x] 將 GitHub repository visibility 由 Private 改成 Public。
 - [x] 選擇 MIT 原始碼授權。
@@ -71,7 +71,7 @@
 - [x] 將專案版本與 Git 發行版本對齊。
 - [x] 驗證正式 manifest、service worker、圖示尺寸及格式。
 - [ ] 在 Android Chrome 與 iOS Safari 驗證安裝、離線重啟與資料持久性。
-- [ ] 在正式網域驗證深層網址重新整理及 service worker 更新。
+- [x] 在正式網域驗證首頁、隱私頁、深層網址重新整理、PWA manifest、service worker 與安全標頭。
 
 ## P1：第一個公開版本建議事項
 
@@ -107,9 +107,8 @@
 
 以下項目不能由程式碼安全推定：
 
-1. 正式 production domain。
-2. 是否要將 MIT `LICENSE` 中的 `fuyo1622` 改成真實姓名或其他法律實體名稱。
-3. Git 歷史重寫完成後，協作者需要重新 clone 或重設本機分支。
+1. 是否要將 MIT `LICENSE` 中的 `fuyo1622` 改成真實姓名或其他法律實體名稱。
+2. Git 歷史重寫完成後，協作者需要重新 clone 或重設本機分支。
 
 ## 2026-07-23 P0 執行紀錄
 
@@ -125,3 +124,5 @@
 - ESLint、28 個 Vitest 測試、production build、release asset verifier、YAML 解析及線上 dependency audit 均通過。
 - 以 production preview 實際檢查繁體中文／英文首頁、隱私頁、語言屬性、直接重新整理及畫面水平溢位；瀏覽器 console 沒有 error 或 warning。
 - GitHub repository visibility 已由 Private 改為 Public。
+- 建立 Vercel Hobby production deployment，固定別名為 <https://acg-app-steel.vercel.app/>，並連接 `fuyo1622/acg_app` 以自動部署 `main`。
+- 正式網域的 `/`、`/privacy`、`/item/123`、`/manifest.webmanifest`、`/sw.js` 與 `/third-party-notices.txt` 均回傳 HTTP 200；CSP、HSTS、Permissions Policy、Referrer Policy、X-Content-Type-Options 與 X-Frame-Options 均已生效。

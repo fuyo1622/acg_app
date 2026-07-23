@@ -1,6 +1,6 @@
 # iPhone／Vercel 階段使用測試指南
 
-最後更新：2026-07-21
+最後更新：2026-07-23
 
 ## 先說結論
 
@@ -47,7 +47,7 @@ npm.cmd run build
 
 注意：Vercel 只會部署 GitHub 上的內容，不會看到電腦中尚未 commit、尚未 push 的修改。準備測試哪個版本，就先確認該版本已安全地 commit 並 push 到預定分支。
 
-## 二、從原本的 Vercel 專案取得測試網址
+## 二、使用目前的 Vercel Production 網址
 
 優先使用既有專案，因為同一個正式網域才能延續 iPhone 上原有的本機資料。
 
@@ -57,11 +57,11 @@ npm.cmd run build
 4. 找到狀態為 **Ready** 的最新 **Production** deployment。
 5. 按 **Visit**，或到 **Settings → Domains** 複製正式網址。
 
-請把本次資訊記在這裡：
+目前正式資訊：
 
-- Production 網址：`________________________________________`
-- 測試 commit：`________________________________________`
-- Vercel deployment 狀態：`Ready / Failed / 其他：__________`
+- Production 網址：<https://acg-app-steel.vercel.app/>
+- 首次正式部署的測試 commit：`c582df3`
+- Vercel deployment 狀態：`Ready`
 
 ### Production 與 Preview 網址的差別
 
@@ -262,9 +262,7 @@ npm.cmd run build
 
 ### 重新整理詳細頁或編輯頁出現 Vercel 404
 
-本專案使用 `BrowserRouter`，目前根目錄沒有 `vercel.json` SPA rewrite。首頁內部導覽通常可用，但直接開啟或重新整理 `/item/...`、`/edit/...` 等深層網址時，Vercel 可能回傳 404。
-
-請把它記為部署設定問題；常見修正是在根目錄加入：
+本專案使用 `BrowserRouter`，根目錄已包含 `vercel.json` SPA rewrite：
 
 ```json
 {
@@ -278,7 +276,7 @@ npm.cmd run build
 }
 ```
 
-這個檔案目前尚未加入專案；若本輪測試遇到此問題，再把它列為後續修正，不要誤判為資料遺失。
+2026-07-23 已在正式網域確認 `/privacy` 與 `/item/123` 直接開啟均回傳 HTTP 200。若日後仍出現 404，先確認使用的是固定 Production 網址及最新 Ready deployment，不要誤判為資料遺失。
 
 ### 清除 Safari 資料後收藏消失
 
@@ -301,4 +299,3 @@ npm.cmd run build
 - [Vercel：Deploying to Vercel](https://vercel.com/docs/deployments/overview)
 - [Vercel：Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite)
 - [Vercel：Generated URLs](https://vercel.com/docs/deployments/generated-urls)
-

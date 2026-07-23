@@ -2,6 +2,8 @@
 
 A local-first, mobile Progressive Web Application (PWA) designed to catalog Anime, Comic, and Gaming merchandise offline.
 
+Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
+
 For the current canonical project spec, see [`docs/project-spec.md`](docs/project-spec.md). For mobile installation steps, see [`docs/install-guide.md`](docs/install-guide.md).
 
 For the current Traditional Chinese iPhone/Vercel deployment and hands-on test procedure, see [`docs/iphone-vercel-testing-guide.zh-TW.md`](docs/iphone-vercel-testing-guide.zh-TW.md).

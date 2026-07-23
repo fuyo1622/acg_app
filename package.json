@@ -11,7 +11,7 @@
   "bugs": {
     "url": "https://github.com/fuyo1622/acg_app/issues"
   },
-  "homepage": "https://github.com/fuyo1622/acg_app#readme",
+  "homepage": "https://acg-app-steel.vercel.app/",
   "type": "module",
   "engines": {
     "node": ">=20.19 <25"
