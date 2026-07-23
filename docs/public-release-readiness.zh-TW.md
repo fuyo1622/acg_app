@@ -33,7 +33,7 @@
 - [x] 第一版以公開 PWA／Vercel 為暫定目標。
 - [ ] 決定並綁定長期使用的 production domain。
 - [x] 確認同時公開原始碼 repository。
-- [ ] 將 GitHub repository visibility 由 Private 改成 Public；目前等待 repository 擁有者登入 GitHub。
+- [x] 將 GitHub repository visibility 由 Private 改成 Public。
 - [x] 選擇 MIT 原始碼授權。
 - [x] 以 GitHub 帳號 `fuyo1622` 作為著作權人名稱並加入 `LICENSE`。
 - [x] 第一版暫不上架 App Store／Google Play。
@@ -63,7 +63,7 @@
 - [x] 加入 `SECURITY.md` 與弱點回報方式。
 - [x] 加入 dependency audit 指令與自動依賴更新設定。
 - [x] 在 CI 執行高風險等級的依賴弱點稽核。
-- [ ] 對最新線上漏洞資料執行一次人工確認；目前尚未將 dependency metadata 傳給外部 audit 服務。
+- [x] 對最新線上漏洞資料執行人工確認，更新相依套件後 `npm audit` 回報 0 個漏洞。
 
 ### 發行品質
 
@@ -110,8 +110,6 @@
 1. 正式 production domain。
 2. 是否要將 MIT `LICENSE` 中的 `fuyo1622` 改成真實姓名或其他法律實體名稱。
 3. Git 歷史重寫完成後，協作者需要重新 clone 或重設本機分支。
-4. Repository 擁有者需登入 GitHub，才能完成 visibility 變更。
-5. 是否允許執行線上 npm audit，將套件名稱與版本送往 npm registry 取得最新 advisory。
 
 ## 2026-07-23 P0 執行紀錄
 
@@ -123,5 +121,7 @@
 - 加入雙語 App 隱私頁、完整 `PRIVACY.md`、`SECURITY.md` 與第三方授權清單。
 - 加入 GitHub Actions CI、Dependabot、audit、NOTICE 產生器與 release asset verifier。
 - 專案版本由 `0.0.0` 對齊至 `0.1.4`。
-- ESLint、28 個 Vitest 測試、production build、release asset verifier、YAML 解析及離線 dependency audit 均通過。
+- 線上 npm audit 初次發現 16 個項目（1 critical、11 high、3 moderate、1 low）；更新相容範圍內的修正版及重建第三方授權清單後，第二次 audit 回報 0 個漏洞。
+- ESLint、28 個 Vitest 測試、production build、release asset verifier、YAML 解析及線上 dependency audit 均通過。
 - 以 production preview 實際檢查繁體中文／英文首頁、隱私頁、語言屬性、直接重新整理及畫面水平溢位；瀏覽器 console 沒有 error 或 warning。
+- GitHub repository visibility 已由 Private 改為 Public。
