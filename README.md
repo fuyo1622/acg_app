@@ -33,6 +33,20 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 
 Open the app online once before testing offline mode. Collection data belongs to the browser and domain where it was created; export a backup before clearing site data, changing devices, or switching production domains.
 
+## Updates, browser storage, and backups
+
+- Collection data and photos remain in IndexedDB across normal app, cache, and service-worker
+  updates when the same domain, device, browser, and browser profile are used.
+- A normal app release does not require exporting or re-importing JSON. Tested database
+  migrations preserve data when the schema changes.
+- JSON is a recovery backup, not an update mechanism. Export periodically and before
+  clearing site data, changing device, browser, or production domain, or installing a
+  major release.
+- **Protect local data** requests persistent browser storage and can reduce automatic
+  eviction, but it cannot protect against manual deletion, device damage, or loss.
+- Backup files may contain collection data, notes, and photos. Store them privately
+  outside the browser.
+
 ## Development
 
 Requirements: Node.js 20.19–24 and npm.

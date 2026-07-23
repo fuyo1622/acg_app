@@ -30,7 +30,11 @@
 
 .language-selector .filter-select {
   color: var(--text-main);
-  padding-right: 1rem;
+  width: auto;
+  min-width: 7rem;
+  padding: 0.5rem 2rem 0.5rem 0.25rem;
+  background-position: right 0.5rem center;
+  background-size: 0.9rem;
 }
 
 .backup-actions {

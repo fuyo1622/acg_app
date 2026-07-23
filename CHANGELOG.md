@@ -16,6 +16,8 @@ for published releases.
 - Playwright end-to-end coverage for CRUD, backup restore, offline startup, and
   service-worker update checks.
 - Public support, contribution, conduct, browser-support, and schema documentation.
+- Bilingual in-app user guide covering collection management, browser storage, app
+  updates, JSON backups, installation, offline use, and feedback.
 
 ### Changed
 
@@ -24,6 +26,7 @@ for published releases.
 - Backup photo serialization and rehydration use bounded concurrency.
 - Import downloads an automatic safety backup before replacing a non-empty collection.
 - Destructive and error flows no longer depend on browser `alert()` or `confirm()`.
+- Language selector spacing prevents its label from overlapping the dropdown arrow.
 
 ## [0.1.4] - 2026-07-23
 

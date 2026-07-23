@@ -1,0 +1,48 @@
+.guide-page {
+  padding-bottom: 2rem;
+}
+
+.guide-back {
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.guide-content {
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.guide-content h1 {
+  margin-bottom: 0.75rem;
+}
+
+.guide-intro {
+  color: var(--text-main);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.guide-content section {
+  margin-top: 1.75rem;
+}
+
+.guide-content section h2 {
+  margin-bottom: 0.65rem;
+}
+
+.guide-content ul {
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+}
+
+.guide-content li {
+  line-height: 1.7;
+}
+
+.guide-content li + li {
+  margin-top: 0.45rem;
+}
+
+.guide-home-link {
+  margin-top: 2rem;
+  text-decoration: none;
+}

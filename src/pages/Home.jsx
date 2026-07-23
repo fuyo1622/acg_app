@@ -379,6 +379,8 @@ export default function Home() {
       </main>
 
       <footer className="home-footer">
+        <Link to="/guide">{t('usageGuide')}</Link>
+        <span aria-hidden="true">·</span>
         <a href="https://tally.so/r/KYNy7M" target="_blank" rel="noreferrer">
           {t('sendFeedback')}
         </a>

@@ -81,6 +81,10 @@ describe('Home smoke flows', () => {
       'href',
       'https://tally.so/r/KYNy7M',
     );
+    expect(screen.getByRole('link', { name: 'User guide' })).toHaveAttribute(
+      'href',
+      '/guide',
+    );
   });
 
   it('renders existing items from mocked data', () => {
