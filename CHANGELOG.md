@@ -6,6 +6,8 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-23
+
 ### Added
 
 - Browser storage usage, capacity warnings, and an opt-in persistent-storage request.
@@ -18,6 +20,8 @@ for published releases.
 - Public support, contribution, conduct, browser-support, and schema documentation.
 - Bilingual in-app user guide covering collection management, browser storage, app
   updates, JSON backups, installation, offline use, and feedback.
+- A single-source semantic version system, visible App version link, release validation,
+  and automatic GitHub Releases for version tags.
 
 ### Changed
 

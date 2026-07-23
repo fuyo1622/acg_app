@@ -36,6 +36,7 @@ import {
   isStorageNearCapacity,
   requestPersistentStorage,
 } from '../utils/storageUtils';
+import { APP_RELEASE_URL, APP_VERSION } from '../utils/version';
 import './Home.css';
 
 function downloadBlob(blob, filename) {
@@ -379,6 +380,15 @@ export default function Home() {
       </main>
 
       <footer className="home-footer">
+        <a
+          href={APP_RELEASE_URL}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={t('versionLabel', { version: APP_VERSION })}
+        >
+          v{APP_VERSION}
+        </a>
+        <span aria-hidden="true">·</span>
         <Link to="/guide">{t('usageGuide')}</Link>
         <span aria-hidden="true">·</span>
         <a href="https://tally.so/r/KYNy7M" target="_blank" rel="noreferrer">

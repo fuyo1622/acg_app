@@ -2,6 +2,9 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
+[![最新版本](https://img.shields.io/github/v/release/fuyo1622/acg_app?display_name=tag&sort=semver)](https://github.com/fuyo1622/acg_app/releases/latest)
+[![CI](https://github.com/fuyo1622/acg_app/actions/workflows/ci.yml/badge.svg)](https://github.com/fuyo1622/acg_app/actions/workflows/ci.yml)
+
 這是一個 local-first 的漸進式網頁應用程式（PWA），用來記錄動漫、漫畫與遊戲相關收藏品。
 
 正式版：[https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
@@ -74,6 +77,15 @@ npm run audit
 `npm run check` 會依序執行 ESLint、Vitest 測試與 production build。
 `npm run test:e2e` 會建置 App 並執行 Chromium 端對端測試；第一次執行前可先跑
 `npx playwright install chromium` 安裝測試瀏覽器。
+
+## 版本與發佈
+
+- App 的唯一正式版本來源是 `package.json` 的 `version` 欄位；建置時會自動顯示在
+  App 頁尾。
+- 版本遵循語意化版本：相容修正增加修訂號、相容新功能增加次版本號、不相容變更
+  增加主版本號。
+- App 頁尾的版本號會連到對應的 GitHub Release；上方的最新版本徽章會自動更新。
+- 維護者請依照 [CONTRIBUTING.md](CONTRIBUTING.md) 的發佈步驟操作。
 
 ## 技術架構與限制
 

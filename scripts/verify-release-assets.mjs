@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const projectRoot = process.cwd();
 const failures = [];
+const packageJson = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'));
 
 function requireFile(relativePath) {
   const absolutePath = join(projectRoot, relativePath);
@@ -80,6 +81,20 @@ if (existsSync(builtIndexPath)) {
   if (!builtIndex.includes('<html lang="zh-TW">')) failures.push('Built index language is not zh-TW');
   if (builtIndex.includes('user-scalable=no')) failures.push('Built viewport disables user zoom');
   if (/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(builtIndex)) failures.push('Built app still references Google Fonts');
+}
+
+const builtAssetsDirectory = requireFile('dist/assets');
+if (existsSync(builtAssetsDirectory)) {
+  const builtJavaScript = readdirSync(builtAssetsDirectory)
+    .filter(fileName => fileName.endsWith('.js'))
+    .map(fileName => readFileSync(join(builtAssetsDirectory, fileName), 'utf8'))
+    .join('\n');
+  if (!builtJavaScript.includes(packageJson.version)) {
+    failures.push(`Built app does not contain version ${packageJson.version}`);
+  }
+  if (!builtJavaScript.includes('/releases/tag/v')) {
+    failures.push('Built app does not contain the GitHub release link');
+  }
 }
 
 const vercelPath = requireFile('vercel.json');

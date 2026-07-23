@@ -2,6 +2,9 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
+[![Latest release](https://img.shields.io/github/v/release/fuyo1622/acg_app?display_name=tag&sort=semver)](https://github.com/fuyo1622/acg_app/releases/latest)
+[![CI](https://github.com/fuyo1622/acg_app/actions/workflows/ci.yml/badge.svg)](https://github.com/fuyo1622/acg_app/actions/workflows/ci.yml)
+
 A local-first Progressive Web App (PWA) for cataloging Anime, Comic, and Gaming merchandise.
 
 Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
@@ -68,6 +71,16 @@ npm run audit
 `npm run check` runs ESLint, the Vitest suite, and the production build.
 `npm run test:e2e` builds the app and runs the Chromium end-to-end suite. On the first run,
 install its browser with `npx playwright install chromium`.
+
+## Versioning and releases
+
+- The canonical App version is the `version` field in `package.json`; the build displays
+  it automatically in the App footer.
+- Releases follow semantic versioning: patch for compatible fixes, minor for compatible
+  features, and major for incompatible changes.
+- The footer version links to its matching GitHub Release. GitHub's latest-release badge
+  above updates automatically.
+- Maintainers should follow the release steps in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Architecture and limitations
 

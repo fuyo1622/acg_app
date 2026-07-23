@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
 import { replaceItemsInDb } from '../utils/backupUtils';
+import { APP_RELEASE_URL, APP_VERSION } from '../utils/version';
 import Home from './Home';
 
 const dbMocks = vi.hoisted(() => ({
@@ -84,6 +85,10 @@ describe('Home smoke flows', () => {
     expect(screen.getByRole('link', { name: 'User guide' })).toHaveAttribute(
       'href',
       '/guide',
+    );
+    expect(screen.getByRole('link', { name: `Version ${APP_VERSION}` })).toHaveAttribute(
+      'href',
+      APP_RELEASE_URL,
     );
   });
 
