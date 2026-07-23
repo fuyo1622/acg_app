@@ -4,21 +4,24 @@ import AddEditItem from './pages/AddEditItem';
 import ItemDetail from './pages/ItemDetail';
 import Privacy from './pages/Privacy';
 import { LanguageProvider } from './contexts/LanguageContext';
+import AppErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   return (
     <LanguageProvider>
-      <BrowserRouter>
-      <div className="container">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/add" element={<AddEditItem />} />
-          <Route path="/edit/:id" element={<AddEditItem />} />
-          <Route path="/item/:id" element={<ItemDetail />} />
-          <Route path="/privacy" element={<Privacy />} />
-        </Routes>
-      </div>
-    </BrowserRouter>
+      <AppErrorBoundary>
+        <BrowserRouter>
+          <div className="container">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/add" element={<AddEditItem />} />
+              <Route path="/edit/:id" element={<AddEditItem />} />
+              <Route path="/item/:id" element={<ItemDetail />} />
+              <Route path="/privacy" element={<Privacy />} />
+            </Routes>
+          </div>
+        </BrowserRouter>
+      </AppErrorBoundary>
     </LanguageProvider>
   );
 }

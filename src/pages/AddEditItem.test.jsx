@@ -83,13 +83,13 @@ describe('AddEditItem smoke flows', () => {
     dbMocks.items.add.mockResolvedValue(1);
     dbMocks.items.update.mockResolvedValue(1);
     dbMocks.items.get.mockResolvedValue(undefined);
+    dbMocks.items.delete.mockResolvedValue(undefined);
     imageMocks.compressImage.mockImplementation((file) => Promise.resolve(file));
     vi.stubGlobal('URL', {
       ...globalThis.URL,
       createObjectURL: vi.fn(() => 'blob:preview'),
       revokeObjectURL: vi.fn(),
     });
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mockLiveQueries();
   });
@@ -112,8 +112,10 @@ describe('AddEditItem smoke flows', () => {
     const form = container.querySelector('form');
     fireEvent.submit(form);
 
-    expect(window.alert).toHaveBeenCalledWith('Please enter at least a series or character.');
+    expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
+      .toHaveTextContent('Please enter at least a series or character.');
     expect(dbMocks.items.add).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     addNewMultiValue('Series / Franchise', 'Neon Genesis Evangelion');
     fireEvent.change(screen.getByLabelText('Merchandise Type'), {
@@ -200,6 +202,33 @@ describe('AddEditItem smoke flows', () => {
         series: ['Neon Genesis Evangelion', 'Evangelion: 3.0+1.0'],
         character: [],
       }));
+    });
+  });
+
+  it('asks for confirmation before deleting and reports delete failures', async () => {
+    const restoredItem = {
+      id: 7,
+      series: ['Imported Series'],
+      character: ['Imported Character'],
+      merchandise_type: 'figure',
+      photo: null,
+    };
+    routerMocks.params = { id: '7' };
+    dbMocks.items.get.mockResolvedValue(restoredItem);
+    dbMocks.items.delete.mockRejectedValueOnce(new Error('delete failed'));
+    mockLiveQueries({ allItems: [restoredItem], editItemQuery: true });
+
+    renderForm();
+    await screen.findByText('Imported Series');
+    fireEvent.click(screen.getByRole('button', { name: 'Are you sure you want to delete this item?' }));
+
+    expect(screen.getByRole('alertdialog', { name: 'Delete item?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(dbMocks.items.delete).toHaveBeenCalledWith(7);
+      expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
+        .toHaveTextContent('Failed to delete this item.');
     });
   });
 });

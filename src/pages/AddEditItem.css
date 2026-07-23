@@ -252,7 +252,7 @@
 .detail-badge {
   display: inline-block;
   background: rgba(99, 102, 241, 0.1);
-  color: var(--accent-primary);
+  color: var(--accent-text);
   border: 1px solid rgba(99, 102, 241, 0.2);
   padding: 0.5rem 1rem;
   border-radius: 20px;

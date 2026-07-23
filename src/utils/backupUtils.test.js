@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { rehydrateBackupItems, serializeBackupItems, validateBackupPayload } from './backupUtils';
-import { BACKUP_VERSION } from './constants';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  mapWithConcurrency,
+  rehydrateBackupItems,
+  replaceItemsInDb,
+  serializeBackupItems,
+  validateBackupFile,
+  validateBackupPayload,
+} from './backupUtils';
+import { BACKUP_LIMITS, BACKUP_VERSION } from './constants';
+
+const validPngDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
 
 describe('validateBackupPayload', () => {
   it('throws when payload format is completely broken', () => {
@@ -39,11 +48,21 @@ describe('validateBackupPayload', () => {
     expect(() => validateBackupPayload(payload, BACKUP_VERSION)).toThrow('invalid photo Data URL');
   });
 
+  it('rejects non-string values inside series and character arrays', () => {
+    const payload = {
+      version: BACKUP_VERSION,
+      items: [
+        { series: ['Evangelion', 42], character: 'Asuka', merchandise_type: 'figure' },
+      ],
+    };
+    expect(() => validateBackupPayload(payload, BACKUP_VERSION)).toThrow('invalid series');
+  });
+
   it('passes perfectly valid offline serialization footprints natively', () => {
     const payload = {
       version: BACKUP_VERSION,
       items: [
-         { series: 'Evangelion', character: 'Asuka', merchandise_type: 'figure', notes: '', photo: 'data:image/png;base64,12345' },
+         { series: 'Evangelion', character: 'Asuka', merchandise_type: 'figure', notes: '', photo: validPngDataUrl },
          { series: '', character: 'Rei Ayanami', merchandise_type: 'plush', notes: '', photo: null }
       ]
     };
@@ -76,5 +95,83 @@ describe('validateBackupPayload', () => {
       series: ['Evangelion', 'Rebuild of Evangelion'],
       character: ['Asuka', 'Rei'],
     }));
+  });
+
+  it('rejects files, item counts and field values that exceed import limits', () => {
+    expect(() => validateBackupFile({ size: BACKUP_LIMITS.maxFileBytes + 1 }))
+      .toThrow('too large');
+
+    const tooManyItems = {
+      version: BACKUP_VERSION,
+      items: Array.from({ length: BACKUP_LIMITS.maxItems + 1 }, () => ({})),
+    };
+    expect(() => validateBackupPayload(tooManyItems, BACKUP_VERSION))
+      .toThrow('too many items');
+
+    const longNotes = {
+      version: BACKUP_VERSION,
+      items: [{
+        series: 'Evangelion',
+        merchandise_type: 'figure',
+        notes: 'x'.repeat(BACKUP_LIMITS.maxNotesLength + 1),
+      }],
+    };
+    expect(() => validateBackupPayload(longNotes, BACKUP_VERSION))
+      .toThrow('notes length limit');
+  });
+
+  it('checks decoded image signatures instead of trusting the declared MIME type', () => {
+    const payload = {
+      version: BACKUP_VERSION,
+      items: [{
+        series: 'Evangelion',
+        merchandise_type: 'figure',
+        photo: 'data:image/jpeg;base64,iVBORw0KGgo=',
+      }],
+    };
+
+    expect(() => validateBackupPayload(payload, BACKUP_VERSION))
+      .toThrow('MIME type does not match');
+  });
+
+  it('rehydrates valid images into typed blobs', async () => {
+    const [item] = await rehydrateBackupItems([{
+      series: 'Evangelion',
+      character: [],
+      merchandise_type: 'figure',
+      photo: validPngDataUrl,
+    }]);
+
+    expect(item.photo).toBeInstanceOf(Blob);
+    expect(item.photo.type).toBe('image/png');
+    expect(item.photo.size).toBe(8);
+  });
+
+  it('limits mapper concurrency while preserving result order', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const results = await mapWithConcurrency([1, 2, 3, 4], 2, async value => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await Promise.resolve();
+      active -= 1;
+      return value * 2;
+    });
+
+    expect(results).toEqual([2, 4, 6, 8]);
+    expect(maximumActive).toBeLessThanOrEqual(2);
+  });
+
+  it('propagates a replacement transaction failure', async () => {
+    const error = new Error('bulk add failed');
+    const fakeDb = {
+      items: {
+        clear: vi.fn().mockResolvedValue(undefined),
+        bulkAdd: vi.fn().mockRejectedValue(error),
+      },
+      transaction: vi.fn(async (_mode, _table, callback) => callback()),
+    };
+
+    await expect(replaceItemsInDb(fakeDb, [{ id: 1 }])).rejects.toThrow('bulk add failed');
   });
 });

@@ -11,15 +11,30 @@ export default function ItemDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { t, lang } = useLanguage();
+  const itemId = Number.parseInt(id, 10);
 
   const item = useLiveQuery(
-    () => db.items.get(parseInt(id))
+    async () => {
+      if (!Number.isInteger(itemId)) return null;
+      return (await db.items.get(itemId)) ?? null;
+    },
+    [itemId],
   );
   
   const url = useObjectUrl(item?.photo);
 
   if (item === undefined) return <div className="loading">{t('loading')}</div>;
-  if (item === null) return <div className="loading">{t('noItemsFound')}</div>;
+  if (item === null) {
+    return (
+      <div className="empty-state item-not-found">
+        <h1>{t('noItemsFound')}</h1>
+        <p>{t('itemNotFound')}</p>
+        <button type="button" className="btn btn-primary" onClick={() => navigate('/')}>
+          {t('backHome')}
+        </button>
+      </div>
+    );
+  }
 
   const separator = lang === 'en' ? ', ' : '、';
   const characterText = formatValues(item.character, separator);

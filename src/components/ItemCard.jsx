@@ -1,10 +1,9 @@
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import { formatValues } from '../utils/valueUtils';
 
 export default function ItemCard({ item }) {
-  const navigate = useNavigate();
   const { t, lang } = useLanguage();
   const imageUrl = useObjectUrl(item.photo);
   const separator = lang === 'en' ? ', ' : '、';
@@ -12,9 +11,9 @@ export default function ItemCard({ item }) {
   const seriesText = formatValues(item.series, separator);
 
   return (
-    <div 
+    <Link
+      to={`/item/${item.id}`}
       className="item-card glass-panel"
-      onClick={() => navigate(`/item/${item.id}`)}
     >
       <div className="image-container">
         {item.photo ? (
@@ -28,6 +27,6 @@ export default function ItemCard({ item }) {
         <h3>{characterText || t('unknownCharacter')}</h3>
         <p className="series">{seriesText || t('unknownSeries')}</p>
       </div>
-    </div>
+    </Link>
   );
 }

@@ -54,23 +54,39 @@ npm run dev
 
 ```bash
 npm run check
+npm run test:e2e
 npm run verify:release
 npm run audit
 ```
 
-`npm run check` 會依序執行 ESLint、28 個 Vitest 測試與 production build。
+`npm run check` 會依序執行 ESLint、Vitest 測試與 production build。
+`npm run test:e2e` 會建置 App 並執行 Chromium 端對端測試；第一次執行前可先跑
+`npx playwright install chromium` 安裝測試瀏覽器。
 
 ## 技術架構與限制
 
 - React 19、Vite、React Router、Dexie 與 `vite-plugin-pwa`。
+- IndexedDB 資料庫 `acg-merch-db` 目前為 schema version 2；唯一版本來源是
+  `src/services/db.js` 的 `DB_SCHEMA_VERSION`。日後變更 schema 必須同步提高版本、
+  加入 Dexie migration 並測試舊資料轉換。
 - 沒有帳號、後端、雲端同步或收藏資料的伺服器副本。
-- 備份採取代式還原，確認匯入後會覆蓋目前的本機收藏。
+- 備份採取代式還原；目前收藏不是空的時，覆蓋前會先自動下載安全備份。
 - 瀏覽器可能依儲存空間政策移除網站資料，重要收藏請定期備份。
 - 目前是可安裝的跨平台 PWA，不是 Android APK／AAB，也不是 iOS IPA／App Store 原生 App。
 
-## 政策與授權資訊
+## 瀏覽器支援範圍
 
-請參考[隱私政策](PRIVACY.md)、[安全政策](SECURITY.md)、[素材來源](ASSETS.md)及[第三方授權](THIRD_PARTY_NOTICES.md)。
+- 核心功能支援 Chrome、Edge、Firefox 與 Safari 的目前及前一個主要版本。
+- 安裝與離線 PWA 流程會持續以 Chromium 做自動化測試；iPhone／iPad 安裝則依賴
+  Safari 的「加入主畫面」功能。
+- 容量估算及持久儲存權限由瀏覽器決定；未授權不影響一般使用，但仍需定期匯出。
+- 無痕／私密瀏覽與 App 內嵌瀏覽器不適合長期保存資料，因此不列入支援範圍。
+
+## 專案與政策資訊
+
+請參考[支援方式](SUPPORT.md)、[版本紀錄](CHANGELOG.md)、[貢獻指南](CONTRIBUTING.md)、
+[行為準則](CODE_OF_CONDUCT.md)、[隱私政策](PRIVACY.md)、[安全政策](SECURITY.md)、
+[素材來源](ASSETS.md)及[第三方授權](THIRD_PARTY_NOTICES.md)。
 
 ## 授權
 

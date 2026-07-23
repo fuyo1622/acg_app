@@ -16,7 +16,7 @@ const content = {
       },
       {
         title: '照片與備份',
-        body: '支援的瀏覽器會在裝置端嘗試壓縮照片。匯出的 JSON 備份未加密，可能包含收藏資訊、備註及照片；請將備份視為私人資料妥善保管。匯入會在確認後取代目前收藏。'
+        body: '支援的瀏覽器會在裝置端嘗試壓縮照片。匯出的 JSON 備份未加密，可能包含收藏資訊、備註及照片；請將備份視為私人資料妥善保管。匯入會在確認後取代目前收藏；目前收藏不是空的時，App 會先下載安全備份。'
       },
       {
         title: '資料遺失風險',
@@ -40,7 +40,7 @@ const content = {
       },
       {
         title: 'Photos and backups',
-        body: 'Supported browsers attempt to compress photos on the device. Exported JSON backups are not encrypted and may include collection data, notes, and photos; store them as private data. Import replaces the current collection after confirmation.'
+        body: 'Supported browsers attempt to compress photos on the device. Exported JSON backups are not encrypted and may include collection data, notes, and photos; store them as private data. Import replaces the current collection after confirmation; the app first downloads a safety backup when the current collection is not empty.'
       },
       {
         title: 'Risk of data loss',

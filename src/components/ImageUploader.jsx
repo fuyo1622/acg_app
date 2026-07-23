@@ -1,10 +1,11 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useId } from 'react';
 import { Camera, Upload, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import './ImageUploader.css';
 
 export default function ImageUploader({ defaultImage, onImageSelected }) {
   const fileInputRef = useRef(null);
+  const inputId = useId();
   const [previewUrl, setPreviewUrl] = useState(null);
   const { t } = useLanguage();
 
@@ -37,32 +38,34 @@ export default function ImageUploader({ defaultImage, onImageSelected }) {
   return (
     <div className="image-uploader glass-panel">
       <input 
+        id={inputId}
         type="file" 
         accept="image/*" 
-        style={{ display: 'none' }} 
+        aria-label={t('addPhoto')}
+        className="sr-only"
         ref={fileInputRef}
         onChange={handleFileChange}
       />
       
       {previewUrl ? (
         <div className="preview-container">
-          <img src={previewUrl} alt="Preview" className="preview-image" />
-          <button type="button" className="clear-btn" onClick={clearImage}>
+          <img src={previewUrl} alt={t('photoPreview')} className="preview-image" />
+          <button type="button" className="clear-btn" onClick={clearImage} aria-label={t('removePhoto')}>
             <X size={20} />
           </button>
-          <div className="change-overlay" onClick={() => fileInputRef.current?.click()}>
+          <button type="button" className="change-overlay" onClick={() => fileInputRef.current?.click()}>
             <Camera size={24} />
             <span>{t('tapToChange')}</span>
-          </div>
+          </button>
         </div>
       ) : (
-        <div className="upload-placeholder" onClick={() => fileInputRef.current?.click()}>
+        <button type="button" className="upload-placeholder" onClick={() => fileInputRef.current?.click()}>
           <div className="upload-icon-wrapper">
             <Upload size={32} color="var(--accent-primary)" />
           </div>
           <h3>{t('addPhoto')}</h3>
           <p>{t('tapToTake')}</p>
-        </div>
+        </button>
       )}
     </div>
   );

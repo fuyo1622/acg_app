@@ -5,6 +5,7 @@ import { db } from '../services/db';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import MultiSelectCombobox from '../components/MultiSelectCombobox';
+import AppDialog from '../components/AppDialog';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_TYPES } from '../utils/constants';
 import { validateItem } from '../utils/validationUtils';
@@ -29,6 +30,8 @@ export default function AddEditItem() {
   const [loading, setLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
   const [customType, setCustomType] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [deletePromptOpen, setDeletePromptOpen] = useState(false);
 
   // Fetch all items for autocomplete
   const allItems = useLiveQuery(() => db.items.toArray());
@@ -89,7 +92,7 @@ export default function AddEditItem() {
     });
 
     if (!isValid) {
-      alert(t(errorKey));
+      setNotice({ title: t('errorTitle'), message: t(errorKey) });
       return;
     }
 
@@ -117,19 +120,21 @@ export default function AddEditItem() {
       navigate(-1); // Go back to previous page
     } catch (error) {
       console.error("Error saving item:", error);
-      alert(t('saveError'));
+      setNotice({ title: t('errorTitle'), message: t('saveError') });
       setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (window.confirm(t('deleteConfirm'))) {
-      try {
-        await db.items.delete(parseInt(id));
-        navigate('/');
-      } catch (error) {
-        console.error("Error deleting item:", error);
-      }
+    setDeletePromptOpen(false);
+    setIsSaving(true);
+    try {
+      await db.items.delete(parseInt(id));
+      navigate('/');
+    } catch (error) {
+      console.error("Error deleting item:", error);
+      setNotice({ title: t('errorTitle'), message: t('deleteError') });
+      setIsSaving(false);
     }
   };
 
@@ -143,7 +148,7 @@ export default function AddEditItem() {
         </button>
         <h2>{isEditing ? t('editItem') : t('newItem')}</h2>
         {isEditing && (
-          <button className="delete-btn" onClick={handleDelete} aria-label={t('deleteConfirm')} disabled={isSaving}>
+          <button className="delete-btn" onClick={() => setDeletePromptOpen(true)} aria-label={t('deleteConfirm')} disabled={isSaving}>
             <Trash2 size={24} color="var(--danger)" />
           </button>
         )}
@@ -236,6 +241,24 @@ export default function AddEditItem() {
           </button>
         </div>
       </form>
+
+      <AppDialog
+        open={deletePromptOpen}
+        title={t('deleteTitle')}
+        message={t('deleteConfirm')}
+        confirmLabel={t('continue')}
+        cancelLabel={t('cancel')}
+        onConfirm={handleDelete}
+        onCancel={() => setDeletePromptOpen(false)}
+        destructive
+      />
+      <AppDialog
+        open={Boolean(notice)}
+        title={notice?.title}
+        message={notice?.message}
+        confirmLabel={t('close')}
+        onConfirm={() => setNotice(null)}
+      />
     </div>
   );
 }

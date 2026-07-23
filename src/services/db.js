@@ -1,7 +1,16 @@
 import Dexie from 'dexie';
 import { toValueArray } from '../utils/valueUtils';
 
-export const db = new Dexie('acg-merch-db');
+export const DB_NAME = 'acg-merch-db';
+export const DB_SCHEMA_VERSION = 2;
+
+export function migrateItemToV2(item) {
+  item.series = toValueArray(item.series);
+  item.character = toValueArray(item.character);
+  return item;
+}
+
+export const db = new Dexie(DB_NAME);
 
 // Define database schema
 db.version(1).stores({
@@ -10,9 +19,6 @@ db.version(1).stores({
   items: '++id, series, character, merchandise_type, created_at, updated_at'
 });
 
-db.version(2).stores({
+db.version(DB_SCHEMA_VERSION).stores({
   items: '++id, *series, *character, merchandise_type, created_at, updated_at'
-}).upgrade(transaction => transaction.table('items').toCollection().modify(item => {
-  item.series = toValueArray(item.series);
-  item.character = toValueArray(item.character);
-}));
+}).upgrade(transaction => transaction.table('items').toCollection().modify(migrateItemToV2));
