@@ -70,6 +70,25 @@
   gap: 1rem;
 }
 
+.home-footer {
+  margin-top: 2rem;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.home-footer a {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  text-underline-offset: 0.2em;
+}
+
+.home-footer a:hover,
+.home-footer a:focus-visible {
+  color: var(--text-main);
+}
+
 /* For very small mobile screens */
 @media (max-width: 380px) {
   .gallery-grid {

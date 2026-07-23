@@ -32,7 +32,7 @@ The current product is an offline-capable MVP focused on manual collection manag
 - No user accounts, authentication, cloud backend, or hosted sync.
 - No multi-device automatic synchronization.
 - No remote image storage.
-- No schema migration beyond the current Dexie version 1 schema.
+- No schema migration beyond the current Dexie version 2 schema.
 - No automated web crawling in the main app flow.
 - No heavy browser E2E framework in the current test baseline.
 - No product feature work implied by this spec document.
@@ -132,7 +132,7 @@ The effective item shape used by the app is:
 - Backup files can become large because photos are embedded as Base64 Data URLs.
 - Large collections may strain memory because Home currently loads all items before filtering.
 - Browser storage policies can evict local data in some conditions, depending on browser and platform.
-- The `web_crawler/` directory is not part of the core app runtime and should be treated as non-core historical or experimental tooling unless a future task explicitly integrates it.
+- Historical third-party crawler fixtures were removed from the public-release worktree because they were not part of the core app and did not have documented redistribution rights.
 - Component smoke tests do not replace manual checks for full PWA install/offline behavior.
 
 ## Future roadmap
@@ -142,4 +142,4 @@ The effective item shape used by the app is:
 - Add focused component tests for Item Detail and delete behavior.
 - Verify PWA caching and storage behavior on representative mobile browsers.
 - Consider storage quota messaging if image-heavy collections become a common support issue.
-- Keep `web_crawler/` separate unless there is a clear product decision to support import automation.
+- Keep any future import automation in a separate, explicitly licensed tool unless there is a clear product decision to integrate it.

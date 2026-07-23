@@ -22,6 +22,8 @@ export const translations = {
     addedOn: 'Added on',
     editItem: 'Edit Item',
     newItem: 'New Item',
+    privacyPolicy: 'Privacy',
+    thirdPartyNotices: 'Third-party notices',
     
     // Home
     myCollection: 'My Collection',
@@ -84,6 +86,8 @@ export const translations = {
     addedOn: '新增於',
     editItem: '編輯項目',
     newItem: '新增項目',
+    privacyPolicy: '隱私',
+    thirdPartyNotices: '第三方授權',
     
     // Home
     myCollection: '我的收藏',
@@ -137,9 +141,10 @@ export function LanguageProvider({ children }) {
 
   useEffect(() => {
     localStorage.setItem('appLang', lang);
+    document.documentElement.lang = lang;
   }, [lang]);
 
-  const t = (key) => translations[lang][key] || key;
+  const t = (key) => translations[lang]?.[key] || translations.en[key] || key;
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>

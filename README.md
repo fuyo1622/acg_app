@@ -6,6 +6,10 @@ For the current canonical project spec, see [`docs/project-spec.md`](docs/projec
 
 For the current Traditional Chinese iPhone/Vercel deployment and hands-on test procedure, see [`docs/iphone-vercel-testing-guide.zh-TW.md`](docs/iphone-vercel-testing-guide.zh-TW.md).
 
+For public-release readiness and the prioritized checklist, see [`docs/public-release-readiness.zh-TW.md`](docs/public-release-readiness.zh-TW.md). Privacy and security policies are available in [`PRIVACY.md`](PRIVACY.md) and [`SECURITY.md`](SECURITY.md).
+
+Source code is released under the [`MIT License`](LICENSE). Application asset provenance is documented in [`ASSETS.md`](ASSETS.md), and production dependency notices are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 ## Features
 - **Client-Side Operations**: Local client-side storage using IndexedDB via Dexie.js.
 - **Image Handling**: Capture or choose item photos and compress new image files before storing them on your device.
@@ -27,6 +31,9 @@ For the current Traditional Chinese iPhone/Vercel deployment and hands-on test p
 3. **`npm run build`**: Assemble standard production assets locally into `/dist`.
 4. **`npm run lint`**: Trigger ESLint configuration pipelines against `/src`.
 5. **`npm test`**: Initiate internal logic regressions via Vitest.
+6. **`npm run check`**: Run lint, tests, and the production build.
+7. **`npm run notices`**: Regenerate production third-party license notices.
+8. **`npm run audit`**: Check dependencies against npm's current advisory database.
 
 ## Limitations
 - Operates locally without built-in cross-device sync. Moving data between devices currently requires manual export/import.

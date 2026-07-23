@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, Globe, Download, Upload } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ItemCard from '../components/ItemCard';
@@ -201,6 +201,12 @@ export default function Home() {
           ))
         )}
       </main>
+
+      <footer className="home-footer">
+        <Link to="/privacy">{t('privacyPolicy')}</Link>
+        <span aria-hidden="true">·</span>
+        <a href={`${import.meta.env.BASE_URL}third-party-notices.txt`}>{t('thirdPartyNotices')}</a>
+      </footer>
 
       <button className="fab" onClick={() => navigate('/add')} aria-label={t('addItem')}>
         <Plus size={28} />

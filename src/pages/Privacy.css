@@ -1,0 +1,44 @@
+.privacy-page {
+  padding-bottom: 2rem;
+}
+
+.privacy-back {
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.privacy-content {
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.privacy-content h1 {
+  margin-bottom: 0.25rem;
+}
+
+.privacy-date {
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.privacy-summary {
+  color: var(--text-main);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.privacy-content section {
+  margin-top: 1.75rem;
+}
+
+.privacy-content section h2 {
+  margin-bottom: 0.5rem;
+}
+
+.privacy-content section p {
+  line-height: 1.7;
+}
+
+.privacy-home-link {
+  margin-top: 2rem;
+  text-decoration: none;
+}

@@ -7,10 +7,10 @@
 **Consequences**: Eliminates network latency, removes the need for user authentication or paid database clusters. However, restricts data syncing across multiple user devices natively unless import/export logic is specifically built.
 
 ## Database Schema Versioning
-**Decision**: Did not migrate Dexie schema during refactoring.
+**Decision**: Migrate string fields to array-backed multi-entry indexes through Dexie schema version 2.
 **Context**: The app holds critical user data. Migrating the schema purely for stylistic database property naming changes runs a high risk of wiping IndexedDB entirely locally.
-**Choice**: Retain `db.version(1)`.
-**Consequences**: The project avoids creating accidental data-loss bugs, but limits the ability to rapidly restructure column sets.
+**Choice**: Retain the version 1 store declaration for existing installations, then define `db.version(2)` with an upgrade that normalizes `series` and `character` into arrays.
+**Consequences**: Existing data is migrated in place, and future schema changes must preserve and test this migration path.
 
 ## Validation Unified Approach
 **Decision**: Use pure JavaScript validation logic and decouple from HTML validation.
@@ -31,10 +31,10 @@
 **Consequences**: Intended to manage object URL lifecycles safely. Needed extraction of an `ItemCard` component so list rendering respects unmounting safely.
 
 ## Extractor Boundary (Web Crawler)
-**Decision**: Delay integration of `web_crawler`.
-**Context**: Incorporating external headless scripts into an offline-first PWA fundamentally changes the security permissions stack.
-**Choice**: Exclude it from the main component loop for this phase.
-**Consequences**: Maintains system purity and focus towards the base application cataloging feature.
+**Decision**: Do not distribute the historical third-party crawler with the public app.
+**Context**: Incorporating external extraction scripts changes the security and content-rights boundary of an offline-first PWA.
+**Choice**: Remove the non-core crawler and downloaded fixtures from the public-release worktree.
+**Consequences**: The production dependency and redistribution surface stays focused on the local collection app.
 
 ## Image Compression
 **Decision**: Implement asynchronous client-side canvas-mediated compression defaulting to `image/webp` dynamically.
