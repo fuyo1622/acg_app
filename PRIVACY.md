@@ -26,9 +26,15 @@ ACG Collector 是 local-first 的 Progressive Web App。收藏項目、作品與
 
 App runtime 不會載入 Google Fonts 或其他第三方字型服務。正式網站由託管供應商提供 HTTPS 與靜態檔案傳輸；供應商的資料處理依其隱私政策辦理。
 
+### 問題回報表單
+
+首頁的「問題回報」連結會離開 App 並開啟由 Tally 提供的外部表單。只有使用者主動送出表單時，Tally 才會接收回報內容、選填的聯絡 Email、選填的圖片附件，以及服務運作所需的標準請求資訊。App 不會自動將 IndexedDB 收藏內容或 JSON 備份傳送到表單。
+
+請勿在表單中上傳 JSON 備份、私人收藏照片、密碼或其他敏感資料。表單回報會保留在專案擁有者的 Tally 工作區，直到由專案擁有者刪除；Tally 的資料處理另依其隱私政策辦理。
+
 ### 聯絡方式
 
-若 repository 已公開，請使用 repository 的 GitHub Issues 提出一般隱私問題。安全弱點請依 `SECURITY.md` 的非公開回報方式處理。
+一般隱私問題可使用[問題回報表單](https://tally.so/r/KYNy7M)或 repository 的 GitHub Issues。安全弱點請依 `SECURITY.md` 的非公開回報方式處理。
 
 ## English
 
@@ -54,6 +60,12 @@ Users can delete all application data through their browser's site-data settings
 
 The application runtime does not load Google Fonts or another third-party font service. The production hosting provider supplies HTTPS and static file delivery and processes data under its own privacy policy.
 
+### Feedback form
+
+The **Send feedback** link leaves the app and opens an external form provided by Tally. Tally receives the report content, optional contact email, optional image attachment, and standard request information needed to operate the service only when the user submits the form. The app does not automatically transfer IndexedDB collection content or JSON backups to the form.
+
+Do not upload JSON backups, private collection photos, passwords, or other sensitive data. Form submissions remain in the project owner's Tally workspace until the project owner deletes them. Tally processes this data under its own privacy policy.
+
 ### Contact
 
-When the repository is public, use its GitHub Issues for general privacy questions. Report security vulnerabilities privately as described in `SECURITY.md`.
+Use the [feedback form](https://tally.so/r/KYNy7M) or the repository's GitHub Issues for general privacy questions. Report security vulnerabilities privately as described in `SECURITY.md`.
