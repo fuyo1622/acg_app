@@ -82,6 +82,15 @@ npm run audit
 - 容量估算及持久儲存權限由瀏覽器決定；未授權不影響一般使用，但仍需定期匯出。
 - 無痕／私密瀏覽與 App 內嵌瀏覽器不適合長期保存資料，因此不列入支援範圍。
 
+## 支援與問題回報
+
+若有使用問題、程式錯誤或功能建議，請填寫中英文皆可使用的
+[問題回報表單](https://tally.so/r/KYNy7M)，不需要 GitHub 帳號。熟悉 GitHub 的使用者
+也可以建立 [GitHub issue](https://github.com/fuyo1622/acg_app/issues)。
+
+請勿上傳 JSON 備份、私人收藏照片、密碼或其他敏感資料。安全漏洞請依
+[安全政策](SECURITY.md)提供的方式回報，不要填入公開表單或公開 issue。
+
 ## 專案與政策資訊
 
 請參考[支援方式](SUPPORT.md)、[版本紀錄](CHANGELOG.md)、[貢獻指南](CONTRIBUTING.md)、

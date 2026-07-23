@@ -29,6 +29,7 @@ export const translations = {
     editItem: 'Edit Item',
     newItem: 'New Item',
     privacyPolicy: 'Privacy',
+    sendFeedback: 'Send feedback',
     thirdPartyNotices: 'Third-party notices',
     
     // Home
@@ -126,6 +127,7 @@ export const translations = {
     editItem: '編輯項目',
     newItem: '新增項目',
     privacyPolicy: '隱私',
+    sendFeedback: '問題回報',
     thirdPartyNotices: '第三方授權',
     
     // Home

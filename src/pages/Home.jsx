@@ -379,6 +379,10 @@ export default function Home() {
       </main>
 
       <footer className="home-footer">
+        <a href="https://tally.so/r/KYNy7M" target="_blank" rel="noreferrer">
+          {t('sendFeedback')}
+        </a>
+        <span aria-hidden="true">·</span>
         <Link to="/privacy">{t('privacyPolicy')}</Link>
         <span aria-hidden="true">·</span>
         <a href={`${import.meta.env.BASE_URL}third-party-notices.txt`}>{t('thirdPartyNotices')}</a>

@@ -76,6 +76,16 @@ install its browser with `npx playwright install chromium`.
   not prevent normal use, but regular exports remain necessary.
 - Private browsing and embedded in-app browsers are not supported for long-term storage.
 
+## Support and feedback
+
+Use the bilingual [feedback form](https://tally.so/r/KYNy7M) for usage questions,
+bug reports, or feature suggestions. No GitHub account is required. GitHub users may
+also open a [GitHub issue](https://github.com/fuyo1622/acg_app/issues).
+
+Do not upload JSON backups, private collection photos, passwords, or other sensitive
+data. Report security vulnerabilities through the process in [SECURITY.md](SECURITY.md),
+not through the public form or a public issue.
+
 ## Project information
 
 See [support](SUPPORT.md), [changelog](CHANGELOG.md), [contributing](CONTRIBUTING.md),

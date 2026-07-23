@@ -77,6 +77,10 @@ describe('Home smoke flows', () => {
     expect(screen.getByRole('heading', { name: 'My Collection' })).toBeInTheDocument();
     expect(screen.getByText('No items found')).toBeInTheDocument();
     expect(screen.getByText('Try adjusting your filters or add a new item.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Send feedback' })).toHaveAttribute(
+      'href',
+      'https://tally.so/r/KYNy7M',
+    );
   });
 
   it('renders existing items from mocked data', () => {
