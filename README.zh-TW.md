@@ -41,8 +41,6 @@
 - 進行上述操作前，請先在首頁按「匯出備份」保存 JSON 檔案。
 - 匯入備份會在確認後取代目前收藏，不是合併。
 
-更完整的疑難排解請參考[安裝與 PWA 指南](docs/install-guide.md)。
-
 ## 本機開發
 
 需求：Node.js 20.19–24 與 npm。
@@ -70,9 +68,9 @@ npm run audit
 - 瀏覽器可能依儲存空間政策移除網站資料，重要收藏請定期備份。
 - 目前是可安裝的跨平台 PWA，不是 Android APK／AAB，也不是 iOS IPA／App Store 原生 App。
 
-## 文件
+## 政策與授權資訊
 
-請參考[文件索引](docs/README.md)、[隱私政策](PRIVACY.md)、[安全政策](SECURITY.md)、[素材來源](ASSETS.md)及[第三方授權](THIRD_PARTY_NOTICES.md)。
+請參考[隱私政策](PRIVACY.md)、[安全政策](SECURITY.md)、[素材來源](ASSETS.md)及[第三方授權](THIRD_PARTY_NOTICES.md)。
 
 ## 授權
 

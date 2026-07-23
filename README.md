@@ -31,7 +31,7 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 3. Choose **Add to Home Screen**, then **Add**.
 4. Launch **ACG** from the home screen.
 
-Open the app online once before testing offline mode. Collection data belongs to the browser and domain where it was created; export a backup before clearing site data, changing devices, or switching production domains. See the [detailed install and troubleshooting guide](docs/install-guide.md).
+Open the app online once before testing offline mode. Collection data belongs to the browser and domain where it was created; export a backup before clearing site data, changing devices, or switching production domains.
 
 ## Development
 
@@ -59,9 +59,9 @@ npm run audit
 - Backup import replaces the current local collection after confirmation.
 - Browser storage policies can remove local data; keep exported backups.
 
-## Documentation
+## Policies and notices
 
-See the [documentation index](docs/README.md), [privacy policy](PRIVACY.md), [security policy](SECURITY.md), [asset provenance](ASSETS.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
+See the [privacy policy](PRIVACY.md), [security policy](SECURITY.md), [asset provenance](ASSETS.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## License
 
