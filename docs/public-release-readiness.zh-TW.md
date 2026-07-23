@@ -28,6 +28,8 @@
 
 ## P0：公開前阻擋事項
 
+狀態：2026-07-23 完成。以下項目已由自動檢查、production 驗證或專案擁有者實機測試確認。
+
 ### 發佈與部署
 
 - [x] 第一版以公開 PWA／Vercel 為暫定目標。
@@ -70,7 +72,7 @@
 - [x] 加入 CI：`npm ci`、lint、test、build。
 - [x] 將專案版本與 Git 發行版本對齊。
 - [x] 驗證正式 manifest、service worker、圖示尺寸及格式。
-- [ ] 在 Android Chrome 與 iOS Safari 驗證安裝、離線重啟與資料持久性。
+- [x] 在目標手機實機驗證安裝、離線重啟與資料持久性；專案擁有者回報測試通過。
 - [x] 在正式網域驗證首頁、隱私頁、深層網址重新整理、PWA manifest、service worker 與安全標頭。
 
 ## P1：第一個公開版本建議事項
@@ -126,3 +128,4 @@
 - GitHub repository visibility 已由 Private 改為 Public。
 - 建立 Vercel Hobby production deployment，固定別名為 <https://acg-app-steel.vercel.app/>，並連接 `fuyo1622/acg_app` 以自動部署 `main`。
 - 正式網域的 `/`、`/privacy`、`/item/123`、`/manifest.webmanifest`、`/sw.js` 與 `/third-party-notices.txt` 均回傳 HTTP 200；CSP、HSTS、Permissions Policy、Referrer Policy、X-Content-Type-Options 與 X-Frame-Options 均已生效。
+- 專案擁有者完成手機實機安裝、離線重啟與本機資料持久性測試，並回報通過；P0 結案。

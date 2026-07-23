@@ -1,49 +1,65 @@
 # Architecture Decisions
 
-## Local-First Storage
-**Decision**: Store all merchandise item metadata and photos locally using IndexedDB (via Dexie.js).
-**Context**: The application target audience shops at conventions, comic shops, and events where internet connectivity can be spotty or unreliable. 
-**Choice**: IndexedDB combined with object URLs for photos, managed under a PWA caching strategy.
-**Consequences**: Eliminates network latency, removes the need for user authentication or paid database clusters. However, restricts data syncing across multiple user devices natively unless import/export logic is specifically built.
+## Local-first storage
 
-## Database Schema Versioning
-**Decision**: Migrate string fields to array-backed multi-entry indexes through Dexie schema version 2.
-**Context**: The app holds critical user data. Migrating the schema purely for stylistic database property naming changes runs a high risk of wiping IndexedDB entirely locally.
-**Choice**: Retain the version 1 store declaration for existing installations, then define `db.version(2)` with an upgrade that normalizes `series` and `character` into arrays.
-**Consequences**: Existing data is migrated in place, and future schema changes must preserve and test this migration path.
+**Decision:** Store merchandise metadata and photos in IndexedDB through Dexie.
 
-## Validation Unified Approach
-**Decision**: Use pure JavaScript validation logic and decouple from HTML validation.
-**Context**: HTML's `required` attributes conflict tightly with "Either A or B required" constraint matching, producing confusing UI blockages.
-**Choice**: Formally extract `validateItem(formData)` to pure functions and manage UI errors independently.
-**Consequences**: Validation logic is now 100% covered by Vitest suites safely avoiding UI rendering overhead.
+**Reason:** The app should remain useful at stores and events with unreliable connectivity and should not require an account or hosted database.
 
-## Search/Filter Extraction
-**Decision**: Extract search & index mapping out of `Home.jsx`.
-**Context**: `Home.jsx` was highly coupled and generating truthiness syntax linting errors due to messy array combinations.
-**Choice**: `filterUtils.js` containing `filterItems()` pure function.
-**Consequences**: Removes UI from filtering pipeline, enables straightforward unit testing over complex matching scenarios.
+**Tradeoff:** Data does not automatically sync between devices. Users must export and import backups when moving data.
 
-## Object URL Lifecycle
-**Decision**: Implement `useObjectUrl` hook.
-**Context**: `URL.createObjectURL(file)` was happening mid-render loop. React re-renders were causing memory leaks in browser caches without `revokeObjectURL` called properly.
-**Choice**: Wrapped creation in `useEffect` within a single hook that automatically fires the revoke destructor upon unmount.
-**Consequences**: Intended to manage object URL lifecycles safely. Needed extraction of an `ItemCard` component so list rendering respects unmounting safely.
+## Database schema versioning
 
-## Extractor Boundary (Web Crawler)
-**Decision**: Do not distribute the historical third-party crawler with the public app.
-**Context**: Incorporating external extraction scripts changes the security and content-rights boundary of an offline-first PWA.
-**Choice**: Remove the non-core crawler and downloaded fixtures from the public-release worktree.
-**Consequences**: The production dependency and redistribution surface stays focused on the local collection app.
+**Decision:** Keep the Dexie version 1 declaration and migrate `series` and `character` strings to arrays in schema version 2.
 
-## Image Compression
-**Decision**: Implement asynchronous client-side canvas-mediated compression defaulting to `image/webp` dynamically.
-**Context**: Heavy native phone photos (3MB-8MB) stored raw severely fragmented the `db.items` rendering the Dexie limits incredibly tight.
-**Choice**: `createImageBitmap` natively respects EXIF rotation without WASM bloat. It passes payloads to an active canvas resized proportionately below `1600px`. Yielding `image/webp` explicitly preserves arbitrary Alpha/Transparency channels out of PNG uploads ensuring black-box voids don't happen.
-**Consequences**: Safely keeps device quotas manageable entirely offline without an authentication or cloud backend hook. Allows original blob passthroughs upon render limits.
+**Reason:** Existing browser installations may contain valuable local data, so schema changes must migrate in place.
 
-## Export & Import Strategy
-**Decision**: Use Base64-encoded Data URLs within a standard `.json` single-file export utilizing a catastrophic 'Replace' policy on import.
-**Context**: Re-syncing localized offline architectures inherently risks duplication vectors, whilst proprietary db-schema exports block user portability natively across basic texts.
-**Choice**: Native `readAsDataURL` easily serializes buffers directly without advanced indexing protocols. Explicitly demanding an atomic `db.items.clear()` before inserting imported arrays removes schema conflict/duplication issues indefinitely. Regenerative buffers dynamically default back out targeting explicit `Blob` identities cleanly bypassing application generational-compression sequences inherently.
-**Consequences**: Base64 artificially inflates `.json` memory payloads massively against binary files. Memory spikes occur precisely during the `fetch(dataUrl).blob()` rehydration phase entirely restricted within short offline allocations blocking until successfully completing prior to Database commits securely preventing orphaned wipes.
+**Tradeoff:** Future schema work must preserve and test the existing migration path.
+
+## Application-level validation
+
+**Decision:** Keep conditional form rules in the pure `validateItem()` utility instead of relying only on HTML `required`.
+
+**Reason:** The product requires at least one series or character, which cannot be represented clearly by independent `required` attributes.
+
+**Tradeoff:** The UI must display validation messages itself, but the rules remain easy to unit test.
+
+## Search and filtering
+
+**Decision:** Keep search and filter behavior in `filterUtils.js` rather than inside the Home component.
+
+**Reason:** Pure utilities reduce component complexity and make multi-value matching testable.
+
+**Tradeoff:** Home currently loads the collection before filtering; large collections may eventually need Dexie-level queries or pagination.
+
+## Object URL lifecycle
+
+**Decision:** Create photo object URLs through `useObjectUrl` and revoke them during cleanup.
+
+**Reason:** Creating object URLs during render without revocation can retain browser memory.
+
+**Tradeoff:** Photo rendering uses an additional hook and component boundary.
+
+## Image compression
+
+**Decision:** Resize large selected images within 1600×1600 and prefer WebP when the result is smaller.
+
+**Reason:** Raw phone photos can quickly consume browser storage and memory.
+
+**Tradeoff:** Compression uses device CPU and may vary across browser image decoders. If processing fails, the app keeps the original file.
+
+## Backup format
+
+**Decision:** Export one JSON file with photos encoded as Data URLs; import validates the file and then replaces the current collection inside a Dexie transaction.
+
+**Reason:** A single file is easy to save and move without a server, and replacement avoids ambiguous merge behavior.
+
+**Tradeoff:** Base64 increases file size and memory usage. Import is destructive after confirmation, so users should protect existing data with a backup.
+
+## Public distribution boundary
+
+**Decision:** Distribute only the local collection PWA, not the historical third-party crawler or downloaded fixtures.
+
+**Reason:** Crawling and redistributed media introduce unrelated security, licensing, and content-rights risks.
+
+**Tradeoff:** Item data must be entered manually or restored from a user-created backup.

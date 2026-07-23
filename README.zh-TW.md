@@ -1,0 +1,79 @@
+# ACG 收藏管理 App
+
+[English](README.md) | [繁體中文](README.zh-TW.md)
+
+這是一個 local-first 的漸進式網頁應用程式（PWA），用來記錄動漫、漫畫與遊戲相關收藏品。
+
+正式版：[https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
+
+## 功能
+
+- 使用 IndexedDB 將收藏資料與照片保存在目前裝置的瀏覽器。
+- 新增、查看、編輯、刪除、搜尋及篩選收藏品。
+- 拍照或從相簿選圖，並在儲存前壓縮較大的圖片。
+- 匯出單一 JSON 備份檔，之後可取代式還原。
+- 從 Android Chrome 或 iOS Safari 安裝到主畫面。
+- 成功連線載入一次後，可離線開啟已快取的 App。
+- 支援繁體中文與英文介面。
+
+## 安裝指南
+
+### Android 手機／平板
+
+1. 使用 Chrome 開啟[正式版 App](https://acg-app-steel.vercel.app/)。
+2. 點右上角 Chrome 選單。
+3. 選擇「安裝應用程式」或「加到主畫面」。
+4. 從主畫面或應用程式列表開啟 **ACG**。
+
+### iPhone／iPad
+
+1. 使用 Safari 開啟[正式版 App](https://acg-app-steel.vercel.app/)。
+2. 點 Safari 的「分享」按鈕。
+3. 選擇「加入主畫面」，再按「加入」。
+4. 從主畫面的 **ACG** 圖示開啟。
+
+### 安裝與資料注意事項
+
+- 第一次使用時請先保持連線，等首頁完整載入後再測試離線模式。
+- 請勿使用無痕／私密瀏覽安裝或保存正式資料。
+- 收藏資料只存在目前瀏覽器與 `acg-app-steel.vercel.app` 網域的 IndexedDB，Vercel 不會保存收藏內容。
+- 清除網站資料、移除瀏覽器資料、更換裝置或改用另一個網域，都可能讓原資料無法存取。
+- 進行上述操作前，請先在首頁按「匯出備份」保存 JSON 檔案。
+- 匯入備份會在確認後取代目前收藏，不是合併。
+
+更完整的疑難排解請參考[安裝與 PWA 指南](docs/install-guide.md)。
+
+## 本機開發
+
+需求：Node.js 20.19–24 與 npm。
+
+```bash
+npm install
+npm run dev
+```
+
+常用檢查：
+
+```bash
+npm run check
+npm run verify:release
+npm run audit
+```
+
+`npm run check` 會依序執行 ESLint、28 個 Vitest 測試與 production build。
+
+## 技術架構與限制
+
+- React 19、Vite、React Router、Dexie 與 `vite-plugin-pwa`。
+- 沒有帳號、後端、雲端同步或收藏資料的伺服器副本。
+- 備份採取代式還原，確認匯入後會覆蓋目前的本機收藏。
+- 瀏覽器可能依儲存空間政策移除網站資料，重要收藏請定期備份。
+- 目前是可安裝的跨平台 PWA，不是 Android APK／AAB，也不是 iOS IPA／App Store 原生 App。
+
+## 文件
+
+請參考[文件索引](docs/README.md)、[隱私政策](PRIVACY.md)、[安全政策](SECURITY.md)、[素材來源](ASSETS.md)及[第三方授權](THIRD_PARTY_NOTICES.md)。
+
+## 授權
+
+本專案採用 [MIT License](LICENSE)。

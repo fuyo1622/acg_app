@@ -1,5 +1,7 @@
 # Install Guide
 
+[English](../README.md) | [繁體中文](../README.zh-TW.md)
+
 ACG Collector can be installed as a Progressive Web App (PWA) from a supported mobile browser. It still runs as a website, but an installed PWA can open from the home screen and use the app shell after the first successful visit.
 
 ## Before You Install
