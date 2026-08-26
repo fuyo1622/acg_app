@@ -69,8 +69,8 @@ npm run audit
 ```
 
 `npm run check` runs ESLint, the Vitest suite, and the production build.
-`npm run test:e2e` builds the app and runs the Chromium end-to-end suite. On the first run,
-install its browser with `npx playwright install chromium`.
+`npm run test:e2e` builds the app and runs the Chromium and WebKit end-to-end suites. On the first run,
+install its browsers with `npx playwright install chromium webkit`.
 
 ## Versioning and releases
 
@@ -97,8 +97,10 @@ install its browser with `npx playwright install chromium`.
 
 - Core features: the current and previous major releases of Chrome, Edge, Firefox, and
   Safari.
-- Install and offline PWA flows are continuously tested in Chromium. iPhone and iPad
-  installation depends on Safari's **Add to Home Screen** behavior.
+- Collection, backup, and accessibility flows are continuously tested in Chromium and
+  WebKit. Offline startup from the service-worker cache is tested in Chromium, because
+  Playwright's WebKit cannot emulate it. iPhone and iPad installation depends on
+  Safari's **Add to Home Screen** behavior.
 - Persistent-storage permission and quota estimates are browser decisions; denial does
   not prevent normal use, but regular exports remain necessary.
 - Private browsing and embedded in-app browsers are not supported for long-term storage.

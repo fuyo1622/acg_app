@@ -50,9 +50,9 @@ function renderForm() {
   );
 }
 
-function mockLiveQueries({ allItems = [], editItemQuery } = {}) {
-  let editQueryStarted = false;
-
+// `editItem` mirrors the component's own contract: `undefined` while the query is in
+// flight, `{ item: null }` once Dexie confirms the id does not exist.
+function mockLiveQueries({ allItems = [], editItem } = {}) {
   vi.mocked(useLiveQuery).mockImplementation((query) => {
     const source = query.toString();
 
@@ -60,9 +60,8 @@ function mockLiveQueries({ allItems = [], editItemQuery } = {}) {
       return allItems;
     }
 
-    if (editItemQuery && source.includes('db.items.get') && !editQueryStarted) {
-      editQueryStarted = true;
-      void query();
+    if (source.includes('db.items.get')) {
+      return editItem === undefined ? undefined : { item: editItem };
     }
 
     return undefined;
@@ -132,7 +131,7 @@ describe('AddEditItem smoke flows', () => {
         photo: null,
       }));
     });
-    expect(routerMocks.navigate).toHaveBeenCalledWith(-1);
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/', { replace: true });
   });
 
   it('edits a restored Blob-backed item without recompressing the existing image', async () => {
@@ -148,7 +147,7 @@ describe('AddEditItem smoke flows', () => {
 
     routerMocks.params = { id: '7' };
     dbMocks.items.get.mockResolvedValue(restoredItem);
-    mockLiveQueries({ allItems: [restoredItem], editItemQuery: true });
+    mockLiveQueries({ allItems: [restoredItem], editItem: restoredItem });
 
     const { container } = renderForm();
 
@@ -167,7 +166,7 @@ describe('AddEditItem smoke flows', () => {
       }));
     });
     expect(compressImage).not.toHaveBeenCalled();
-    expect(routerMocks.navigate).toHaveBeenCalledWith(-1);
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/item/7', { replace: true });
   });
 
   it('shows matching options in the dropdown and saves multiple selected values', async () => {
@@ -216,7 +215,7 @@ describe('AddEditItem smoke flows', () => {
     routerMocks.params = { id: '7' };
     dbMocks.items.get.mockResolvedValue(restoredItem);
     dbMocks.items.delete.mockRejectedValueOnce(new Error('delete failed'));
-    mockLiveQueries({ allItems: [restoredItem], editItemQuery: true });
+    mockLiveQueries({ allItems: [restoredItem], editItem: restoredItem });
 
     renderForm();
     await screen.findByText('Imported Series');
@@ -229,6 +228,36 @@ describe('AddEditItem smoke flows', () => {
       expect(dbMocks.items.delete).toHaveBeenCalledWith(7);
       expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
         .toHaveTextContent('Failed to delete this item.');
+    });
+  });
+  it('selects an existing custom type instead of falling back to the free-text field', async () => {
+    const customItem = {
+      id: 7,
+      series: ['Imported Series'],
+      character: ['Imported Character'],
+      merchandise_type: 'Nendoroid',
+      photo: null,
+    };
+    routerMocks.params = { id: '7' };
+    dbMocks.items.get.mockResolvedValue(customItem);
+    mockLiveQueries({ allItems: [customItem], editItem: customItem });
+
+    renderForm();
+    await screen.findByText('Imported Series');
+
+    expect(screen.getByLabelText('Merchandise Type')).toHaveValue('Nendoroid');
+    expect(screen.queryByPlaceholderText('Type to search or add...')).not.toBeInTheDocument();
+  });
+
+  it('leaves the edit form when the requested item does not exist', async () => {
+    routerMocks.params = { id: '99' };
+    dbMocks.items.get.mockResolvedValue(undefined);
+    mockLiveQueries({ allItems: [], editItem: null });
+
+    renderForm();
+
+    await waitFor(() => {
+      expect(routerMocks.navigate).toHaveBeenCalledWith('/', { replace: true });
     });
   });
 });

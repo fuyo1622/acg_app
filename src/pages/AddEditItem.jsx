@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
@@ -11,7 +11,7 @@ import { DEFAULT_TYPES } from '../utils/constants';
 import { validateItem } from '../utils/validationUtils';
 import { getUniqueValues } from '../utils/filterUtils';
 import { compressImage } from '../utils/imageUtils';
-import { toValueArray } from '../utils/valueUtils';
+import { isSameValue, toValueArray } from '../utils/valueUtils';
 import './AddEditItem.css';
 
 export default function AddEditItem() {
@@ -33,36 +33,56 @@ export default function AddEditItem() {
   const [notice, setNotice] = useState(null);
   const [deletePromptOpen, setDeletePromptOpen] = useState(false);
 
+  const itemId = Number.parseInt(id, 10);
+  const exitPath = isEditing ? `/item/${id}` : '/';
+
   // Fetch all items for autocomplete
   const allItems = useLiveQuery(() => db.items.toArray());
-  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(allItems);
+  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = useMemo(
+    () => getUniqueValues(allItems),
+    [allItems],
+  );
 
-  // Fetch item if editing
-  useLiveQuery(async () => {
-    if (isEditing) {
-      const item = await db.items.get(parseInt(id));
-      if (item) {
-        let mType = item.merchandise_type;
-        let isCustomUnlisted = mType && !DEFAULT_TYPES.includes(mType) && !uniqueCustomTypes.includes(mType);
-        
-        if (isCustomUnlisted) {
-           setCustomType(mType);
-           mType = '__custom__';
-        }
+  // Fetch item if editing. The wrapper object separates "still loading" from "not found".
+  const loadedItem = useLiveQuery(
+    async () => (isEditing ? { item: (await db.items.get(itemId)) ?? null } : null),
+    [itemId, isEditing],
+  );
 
-        setFormData({
-          series: toValueArray(item.series),
-          character: toValueArray(item.character),
-          merchandise_type: mType,
-          notes: item.notes || '',
-        });
-        setPhoto(item.photo);
-      } else {
-        navigate('/'); // Item not found
-      }
-      setLoading(false);
+  // Fill the form once, and only after the type list has loaded. Classifying the type
+  // against an empty list would push an already-listed type into the free-text box.
+  const isFormInitialized = useRef(false);
+  useEffect(() => {
+    if (!isEditing || isFormInitialized.current) return;
+    if (!loadedItem || allItems === undefined) return;
+
+    const { item } = loadedItem;
+    if (!item) {
+      navigate('/', { replace: true });
+      return;
     }
-  }, [id, isEditing]);
+
+    let selectedType = item.merchandise_type;
+    const listedType = [...DEFAULT_TYPES, ...uniqueCustomTypes]
+      .find(type => isSameValue(type, selectedType));
+
+    if (listedType) {
+      selectedType = listedType;
+    } else if (selectedType) {
+      setCustomType(selectedType);
+      selectedType = '__custom__';
+    }
+
+    setFormData({
+      series: toValueArray(item.series),
+      character: toValueArray(item.character),
+      merchandise_type: selectedType,
+      notes: item.notes || '',
+    });
+    setPhoto(item.photo);
+    isFormInitialized.current = true;
+    setLoading(false);
+  }, [isEditing, loadedItem, allItems, uniqueCustomTypes, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -111,13 +131,15 @@ export default function AddEditItem() {
       };
 
       if (isEditing) {
-        await db.items.update(parseInt(id), itemData);
+        await db.items.update(itemId, itemData);
       } else {
         itemData.created_at = new Date();
         await db.items.add(itemData);
       }
-      
-      navigate(-1); // Go back to previous page
+
+      // An explicit destination: /edit/:id can be opened directly, where there is no
+      // in-app history entry to go back to.
+      navigate(exitPath, { replace: true });
     } catch (error) {
       console.error("Error saving item:", error);
       setNotice({ title: t('errorTitle'), message: t('saveError') });
@@ -129,7 +151,7 @@ export default function AddEditItem() {
     setDeletePromptOpen(false);
     setIsSaving(true);
     try {
-      await db.items.delete(parseInt(id));
+      await db.items.delete(itemId);
       navigate('/');
     } catch (error) {
       console.error("Error deleting item:", error);
@@ -143,7 +165,7 @@ export default function AddEditItem() {
   return (
     <div className="form-page">
       <header className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('cancel')} disabled={isSaving}>
+        <button className="back-btn" onClick={() => navigate(exitPath)} aria-label={t('cancel')} disabled={isSaving}>
           <ArrowLeft size={24} />
         </button>
         <h2>{isEditing ? t('editItem') : t('newItem')}</h2>
@@ -232,7 +254,7 @@ export default function AddEditItem() {
         </div>
 
         <div className="form-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)} disabled={isSaving}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(exitPath)} disabled={isSaving}>
             {t('cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={isSaving}>

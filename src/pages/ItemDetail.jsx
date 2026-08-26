@@ -43,7 +43,7 @@ export default function ItemDetail() {
   return (
     <div className="item-detail-page">
       <header className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('cancel')}>
+        <button className="back-btn" onClick={() => navigate('/')} aria-label={t('backHome')}>
           <ArrowLeft size={24} />
         </button>
         <button className="edit-btn" onClick={() => navigate(`/edit/${item.id}`)} aria-label={t('editItem')}>

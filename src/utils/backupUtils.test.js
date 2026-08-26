@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  estimateBackupBytes,
+  exceedsBackupSizeLimit,
   mapWithConcurrency,
   rehydrateBackupItems,
   replaceItemsInDb,
@@ -173,5 +175,44 @@ describe('validateBackupPayload', () => {
     };
 
     await expect(replaceItemsInDb(fakeDb, [{ id: 1 }])).rejects.toThrow('bulk add failed');
+  });
+});
+
+describe('backup size estimation', () => {
+  function itemWithPhoto(photoBytes) {
+    const photo = new Blob(['photo'], { type: 'image/webp' });
+    Object.defineProperty(photo, 'size', { value: photoBytes });
+    return { id: 1, series: ['Series'], character: ['Character'], merchandise_type: 'figure', photo };
+  }
+
+  it('returns zero for a missing or empty collection', () => {
+    expect(estimateBackupBytes(undefined)).toBe(0);
+    expect(estimateBackupBytes([])).toBe(0);
+  });
+
+  it('counts Base64 expansion of photos', () => {
+    const withoutPhoto = estimateBackupBytes([{ ...itemWithPhoto(0), photo: null }]);
+    const withPhoto = estimateBackupBytes([itemWithPhoto(3 * 1024 * 1024)]);
+
+    expect(withPhoto - withoutPhoto).toBeGreaterThan(4 * 1024 * 1024);
+  });
+
+  it('counts multi-byte notes as their encoded length', () => {
+    const ascii = estimateBackupBytes([{ series: ['S'], notes: 'aaa' }]);
+    const chinese = estimateBackupBytes([{ series: ['S'], notes: '公仔盒' }]);
+
+    expect(chinese).toBe(ascii + 6);
+  });
+
+  it('reports collections that would exceed the import file limit', () => {
+    const smallCollection = [itemWithPhoto(1024)];
+    const largeCollection = Array.from(
+      { length: 8 },
+      () => itemWithPhoto(8 * 1024 * 1024),
+    );
+
+    expect(exceedsBackupSizeLimit(smallCollection)).toBe(false);
+    expect(estimateBackupBytes(largeCollection)).toBeGreaterThan(BACKUP_LIMITS.maxFileBytes);
+    expect(exceedsBackupSizeLimit(largeCollection)).toBe(true);
   });
 });

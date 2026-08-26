@@ -103,6 +103,44 @@ function validateValues(value, label, index) {
   ));
 }
 
+// A Data URL prefix such as "data:image/webp;base64," plus JSON quoting.
+const PHOTO_ENCODING_OVERHEAD_BYTES = 32;
+
+function byteLength(text) {
+  return typeof TextEncoder === 'function'
+    ? new TextEncoder().encode(text).length
+    : text.length;
+}
+
+// Approximates the exported JSON size without serializing photos, so Home can warn
+// before it builds a backup that its own import limits would later reject.
+export function estimateBackupBytes(items) {
+  if (!Array.isArray(items)) return 0;
+
+  return items.reduce((total, item) => {
+    const photoBytes = item?.photo instanceof Blob ? item.photo.size : 0;
+    const encodedPhotoBytes = photoBytes
+      ? Math.ceil(photoBytes / 3) * 4 + PHOTO_ENCODING_OVERHEAD_BYTES
+      : 0;
+    const metadataBytes = byteLength(JSON.stringify({
+      id: item?.id ?? null,
+      series: toValueArray(item?.series),
+      character: toValueArray(item?.character),
+      merchandise_type: item?.merchandise_type || '',
+      notes: item?.notes || '',
+      created_at: null,
+      updated_at: null,
+      photo: null,
+    }));
+
+    return total + encodedPhotoBytes + metadataBytes;
+  }, 0);
+}
+
+export function exceedsBackupSizeLimit(items) {
+  return estimateBackupBytes(items) > BACKUP_LIMITS.maxFileBytes;
+}
+
 export function validateBackupFile(file) {
   if (!file || typeof file.size !== 'number') throw new Error('Backup file missing');
   if (file.size > BACKUP_LIMITS.maxFileBytes) throw new Error('Backup file is too large');

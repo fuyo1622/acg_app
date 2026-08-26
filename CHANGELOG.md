@@ -6,6 +6,38 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-26
+
+### Added
+
+- A not-found page for unknown addresses, replacing the blank screen that the SPA
+  rewrite produced.
+- An export warning when a collection would produce a backup larger than the import
+  limit, so an oversized backup is a deliberate choice rather than a surprise at restore
+  time.
+- Tests for the collection card, error boundary, value helpers, multi-select keyboard
+  behavior, and the not-found page, plus end-to-end coverage for unknown addresses,
+  directly opened edit pages, custom types, type search, and filter recovery.
+- A WebKit end-to-end project covering the iOS Safari path, beside the existing Chromium
+  project that keeps the offline service-worker check.
+
+### Changed
+
+- Series, character, and merchandise-type values that differ only by letter case or
+  padding are now treated as one category in filters, filter options, and search.
+- Search also matches the merchandise type, by stored value and by translated label.
+- A filter whose value no longer exists in the collection returns to "all" instead of
+  leaving an empty gallery.
+- Saving, cancelling, and going back from an item or edit page now navigate to an
+  explicit destination, so a directly opened `/edit/:id` no longer exits the app.
+- Editing an item now waits for the type list before choosing between the type dropdown
+  and the free-text field, so an existing custom type stays selected in the dropdown.
+
+### Fixed
+
+- Updated dependencies to clear six high-severity and one moderate advisory reported by
+  `npm audit`, including the React Router CSRF advisory.
+
 ## [0.2.0] - 2026-07-23
 
 ### Added

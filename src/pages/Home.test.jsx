@@ -40,14 +40,43 @@ vi.mock('../utils/backupUtils', async (importOriginal) => {
   };
 });
 
-function renderHome() {
-  return render(
+function homeElement() {
+  return (
     <LanguageProvider>
       <MemoryRouter>
         <Home />
       </MemoryRouter>
     </LanguageProvider>
   );
+}
+
+function renderHome() {
+  return render(homeElement());
+}
+
+function collectionItem(id, photoBytes) {
+  let photo = null;
+
+  if (photoBytes) {
+    photo = new Blob(['photo'], { type: 'image/webp' });
+    Object.defineProperty(photo, 'size', { value: photoBytes });
+  }
+
+  return {
+    id,
+    series: ['Current Series'],
+    character: ['Current Character'],
+    merchandise_type: 'figure',
+    notes: '',
+    photo,
+    created_at: new Date('2026-01-01T00:00:00.000Z'),
+    updated_at: new Date('2026-01-01T00:00:00.000Z'),
+  };
+}
+
+// Each photo stays under the per-photo limit; together they pass the 50 MiB file limit.
+function oversizedCollection() {
+  return Array.from({ length: 8 }, (_, index) => collectionItem(index + 1, 8 * 1024 * 1024));
 }
 
 describe('Home smoke flows', () => {
@@ -207,5 +236,66 @@ describe('Home smoke flows', () => {
         }),
       ]);
     });
+  });
+  it('warns before exporting a backup that exceeds the import limit', async () => {
+    const items = oversizedCollection();
+    dbMocks.items.toArray.mockResolvedValue(items);
+    vi.mocked(useLiveQuery).mockReturnValue(items);
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+    const warning = await screen.findByRole('dialog', { name: 'Large backup' });
+    expect(warning).toHaveTextContent('larger than the import limit');
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+  });
+
+  it('exports a collection within the limit without a warning', async () => {
+    const items = [collectionItem(1, 0)];
+    dbMocks.items.toArray.mockResolvedValue(items);
+    vi.mocked(useLiveQuery).mockReturnValue(items);
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('dialog', { name: 'Large backup' })).not.toBeInTheDocument();
+  });
+
+  it('clears a filter whose value no longer exists in the collection', async () => {
+    vi.mocked(useLiveQuery).mockReturnValue([{
+      id: 1,
+      series: ['Evangelion'],
+      character: ['Asuka'],
+      merchandise_type: 'figure',
+      photo: null,
+    }]);
+
+    const { rerender } = renderHome();
+    const seriesFilter = screen.getByRole('combobox', { name: 'Filter by series' });
+    fireEvent.change(seriesFilter, { target: { value: 'Evangelion' } });
+    expect(seriesFilter).toHaveValue('Evangelion');
+
+    vi.mocked(useLiveQuery).mockReturnValue([{
+      id: 2,
+      series: ['Gundam'],
+      character: ['Char'],
+      merchandise_type: 'figure',
+      photo: null,
+    }]);
+    rerender(homeElement());
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Filter by series' })).toHaveValue('all');
+    });
+    expect(screen.queryByText('No items found')).not.toBeInTheDocument();
   });
 });

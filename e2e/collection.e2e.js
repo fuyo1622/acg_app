@@ -7,6 +7,19 @@ async function useEnglish(page) {
   await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
 }
 
+// The combobox offers an existing value instead of an "add" entry once one is stored.
+async function chooseValue(page, label, value) {
+  await page.getByRole('combobox', { name: label }).fill(value);
+
+  const addOption = page.getByRole('option', { name: `Add "${value}"` });
+  if (await addOption.count()) {
+    await addOption.click();
+    return;
+  }
+
+  await page.getByRole('option', { name: value, exact: true }).first().click();
+}
+
 async function addItem(page, {
   series = 'Neon Genesis Evangelion',
   character = 'Asuka Langley',
@@ -15,15 +28,13 @@ async function addItem(page, {
 } = {}) {
   await page.getByRole('button', { name: 'Add Item' }).click();
 
-  const seriesInput = page.getByRole('combobox', { name: 'Series / Franchise' });
-  await seriesInput.fill(series);
-  await page.getByRole('option', { name: `Add "${series}"` }).click();
-
-  const characterInput = page.getByRole('combobox', { name: 'Character' });
-  await characterInput.fill(character);
-  await page.getByRole('option', { name: `Add "${character}"` }).click();
+  await chooseValue(page, 'Series / Franchise', series);
+  await chooseValue(page, 'Character', character);
 
   await page.getByLabel('Merchandise Type').selectOption(type);
+  if (type === '__custom__') {
+    await page.getByPlaceholder('Type to search or add...').fill('Nendoroid');
+  }
   await page.getByLabel('Notes (Optional)').fill(notes);
   await page.getByRole('button', { name: 'Add Item', exact: true }).click();
   await expect(page.getByRole('heading', { name: character })).toBeVisible();
@@ -48,6 +59,77 @@ test('adds, edits and deletes a collection item', async ({ page }) => {
 
   await expect(page.getByText('No items found')).toBeVisible();
   await expect(page.getByRole('link', { name: /Asuka Langley/ })).toHaveCount(0);
+});
+
+test('shows a recoverable page for an unknown address', async ({ page }) => {
+  await useEnglish(page);
+  await page.goto('/does-not-exist');
+
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to collection' }).click();
+  await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
+});
+
+test('leaves a directly opened edit page for the item instead of the browser history', async ({ page }) => {
+  await useEnglish(page);
+  await addItem(page);
+
+  const itemPath = await page.getByRole('link', { name: /Asuka Langley/ }).getAttribute('href');
+  await page.goto(itemPath.replace('/item/', '/edit/'));
+  await expect(page.getByRole('heading', { name: 'Edit Item' })).toBeVisible();
+
+  await page.getByLabel('Notes (Optional)').fill('Bought at the convention');
+  await page.getByRole('button', { name: 'Save Changes' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`${itemPath}$`));
+  await expect(page.getByText('Bought at the convention')).toBeVisible();
+});
+
+test('keeps a custom merchandise type selectable after reopening the edit form', async ({ page }) => {
+  await useEnglish(page);
+  await addItem(page, { character: 'Rei Ayanami', type: '__custom__' });
+
+  const itemPath = await page.getByRole('link', { name: /Rei Ayanami/ }).getAttribute('href');
+  await page.goto(itemPath.replace('/item/', '/edit/'));
+
+  await expect(page.getByLabel('Merchandise Type')).toHaveValue('Nendoroid');
+  await expect(page.getByPlaceholder('Type to search or add...')).toHaveCount(0);
+});
+
+test('searches by merchandise type and reuses one series across items', async ({ page }) => {
+  await useEnglish(page);
+  await addItem(page, { series: 'Evangelion', character: 'Asuka Langley', type: 'figure' });
+  await addItem(page, { series: 'Evangelion', character: 'Rei Ayanami', type: 'plush' });
+
+  const seriesFilter = page.getByLabel('Filter by series');
+  await expect(seriesFilter).toHaveValue('all');
+  await expect(seriesFilter.locator('option')).toHaveCount(2); // "All Series" plus Evangelion
+
+  await seriesFilter.selectOption('Evangelion');
+  await expect(page.getByRole('link', { name: /Asuka Langley/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Rei Ayanami/ })).toBeVisible();
+
+  await seriesFilter.selectOption('all');
+  await page.getByLabel('Search collection').fill('Plush');
+  await expect(page.getByRole('link', { name: /Rei Ayanami/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Asuka Langley/ })).toHaveCount(0);
+});
+
+test('clears a series filter once its last item is deleted', async ({ page }) => {
+  await useEnglish(page);
+  await addItem(page, { series: 'Gundam', character: 'Char Aznable', type: 'figure' });
+  await addItem(page, { series: 'Evangelion', character: 'Asuka Langley', type: 'figure' });
+
+  await page.getByLabel('Filter by series').selectOption('Gundam');
+  await expect(page.getByRole('link', { name: /Asuka Langley/ })).toHaveCount(0);
+
+  await page.getByRole('link', { name: /Char Aznable/ }).click();
+  await page.getByRole('button', { name: 'Edit Item' }).click();
+  await page.getByRole('button', { name: 'Are you sure you want to delete this item?' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByLabel('Filter by series')).toHaveValue('all');
+  await expect(page.getByRole('link', { name: /Asuka Langley/ })).toBeVisible();
 });
 
 test('exports, imports and creates a pre-replacement safety backup', async ({ page }) => {
@@ -77,7 +159,7 @@ test('exports, imports and creates a pre-replacement safety backup', async ({ pa
   await expect(page.getByRole('heading', { name: 'Asuka Langley' })).toBeVisible();
 });
 
-test('runs offline from the service worker cache and checks for an update', async ({ page, context }) => {
+test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {
   await useEnglish(page);
 
   await page.evaluate(async () => {

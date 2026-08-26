@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterItems, getUniqueValues } from './filterUtils';
+import { filterItems, getUniqueValues, resolveFilterValue } from './filterUtils';
 
 describe('filterUtils', () => {
   const items = [
@@ -41,5 +41,70 @@ describe('filterUtils', () => {
 
     expect(uniqueCustomTypes).toContain('custom_stand');
     expect(uniqueCustomTypes).not.toContain('figure'); // standard types excluded
+  });
+
+  it('treats values that differ only by case as one category', () => {
+    const mixedCase = [
+      { id: 1, series: ['Evangelion'], character: ['Asuka'], merchandise_type: 'figure' },
+      { id: 2, series: ['evangelion'], character: ['asuka'], merchandise_type: 'Figure' },
+      { id: 3, series: [' EVANGELION '], character: ['Rei'], merchandise_type: 'nendoroid' },
+    ];
+
+    const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(mixedCase);
+    expect(uniqueSeries).toEqual(['Evangelion']);
+    expect(uniqueCharacters).toEqual(['Asuka', 'Rei']);
+    expect(uniqueCustomTypes).toEqual(['nendoroid']);
+
+    const bySeries = filterItems({
+      items: mixedCase,
+      searchTerm: '',
+      filterType: 'all',
+      filterSeries: 'Evangelion',
+      filterCharacter: 'all',
+    });
+    expect(bySeries).toHaveLength(3);
+
+    const byType = filterItems({
+      items: mixedCase,
+      searchTerm: '',
+      filterType: 'figure',
+      filterSeries: 'all',
+      filterCharacter: 'all',
+    });
+    expect(byType).toHaveLength(2);
+  });
+
+  it('searches the merchandise type by stored key and by translated label', () => {
+    const getTypeLabel = type => (type === 'plush' ? '玩偶' : type);
+
+    const byKey = filterItems({
+      items,
+      searchTerm: 'plush',
+      filterType: 'all',
+      filterSeries: 'all',
+      filterCharacter: 'all',
+      getTypeLabel,
+    });
+    expect(byKey).toHaveLength(1);
+    expect(byKey[0].id).toBe(3);
+
+    const byLabel = filterItems({
+      items,
+      searchTerm: '玩偶',
+      filterType: 'all',
+      filterSeries: 'all',
+      filterCharacter: 'all',
+      getTypeLabel,
+    });
+    expect(byLabel).toHaveLength(1);
+    expect(byLabel[0].id).toBe(3);
+  });
+
+  it('resolves a filter value against the options that still exist', () => {
+    expect(resolveFilterValue(['Evangelion', 'Gundam'], 'all')).toBe('all');
+    expect(resolveFilterValue(['Evangelion', 'Gundam'], 'Evangelion')).toBe('Evangelion');
+    expect(resolveFilterValue(['evangelion'], 'Evangelion')).toBe('evangelion');
+    expect(resolveFilterValue(['Gundam'], 'Evangelion')).toBe('all');
+    expect(resolveFilterValue([], 'Evangelion')).toBe('all');
   });
 });

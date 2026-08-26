@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -16,13 +16,16 @@ import { useLanguage } from '../contexts/LanguageContext';
 import AppDialog from '../components/AppDialog';
 import ItemCard from '../components/ItemCard';
 import {
+  BACKUP_LIMITS,
   BACKUP_VERSION,
   COLLECTION_PAGE_SIZE,
   DEFAULT_TYPES,
 } from '../utils/constants';
-import { filterItems, getUniqueValues } from '../utils/filterUtils';
+import { filterItems, getUniqueValues, resolveFilterValue } from '../utils/filterUtils';
 import {
   buildBackupPayload,
+  estimateBackupBytes,
+  exceedsBackupSizeLimit,
   parseBackupText,
   rehydrateBackupItems,
   replaceItemsInDb,
@@ -71,6 +74,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [notice, setNotice] = useState(null);
   const [stagedImport, setStagedImport] = useState(null);
+  const [stagedExport, setStagedExport] = useState(null);
   const [storageStatus, setStorageStatus] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -96,28 +100,86 @@ export default function Home() {
     setCurrentPage(1);
   }, [searchTerm, filterType, filterSeries, filterCharacter]);
 
-  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(items);
-  const filteredItems = filterItems({
-    items,
-    searchTerm,
-    filterType,
-    filterSeries,
-    filterCharacter,
-  });
+  const getTypeLabel = useCallback(
+    (type) => (DEFAULT_TYPES.includes(type) ? t(type) : type),
+    [t],
+  );
+
+  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = useMemo(
+    () => getUniqueValues(items),
+    [items],
+  );
+
+  // A filter can outlive the value it points at, for example after the last item using
+  // a series is deleted or re-spelled. Re-point it instead of showing an empty gallery.
+  useEffect(() => {
+    if (!items) return;
+    const typeOptions = [...DEFAULT_TYPES, ...uniqueCustomTypes];
+    setFilterType(current => resolveFilterValue(typeOptions, current));
+    setFilterSeries(current => resolveFilterValue(uniqueSeries, current));
+    setFilterCharacter(current => resolveFilterValue(uniqueCharacters, current));
+  }, [items, uniqueSeries, uniqueCharacters, uniqueCustomTypes]);
+
+  const filteredItems = useMemo(
+    () => filterItems({
+      items,
+      searchTerm,
+      filterType,
+      filterSeries,
+      filterCharacter,
+      getTypeLabel,
+    }),
+    [items, searchTerm, filterType, filterSeries, filterCharacter, getTypeLabel],
+  );
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / COLLECTION_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, pageCount);
   const pageStart = (safeCurrentPage - 1) * COLLECTION_PAGE_SIZE;
   const visibleItems = filteredItems.slice(pageStart, pageStart + COLLECTION_PAGE_SIZE);
 
+  const storageLocale = lang === 'zh-TW' ? 'zh-TW' : 'en';
+
   const showError = (messageKey) => {
     setNotice({ title: t('errorTitle'), message: t(messageKey) });
+  };
+
+  const writeBackup = async (collectionItems) => {
+    const blob = await createBackup(collectionItems);
+    downloadBlob(blob, backupFilename('acg-backup'));
   };
 
   const handleExport = async () => {
     setIsProcessing(true);
     try {
-      const blob = await createBackup(await db.items.toArray());
-      downloadBlob(blob, backupFilename('acg-backup'));
+      const collectionItems = await db.items.toArray();
+
+      // Warn rather than block: a backup this app could not re-import is still the
+      // user's only copy, so the decision belongs to them.
+      if (exceedsBackupSizeLimit(collectionItems)) {
+        setStagedExport({
+          items: collectionItems,
+          size: formatBytes(estimateBackupBytes(collectionItems), storageLocale),
+          limit: formatBytes(BACKUP_LIMITS.maxFileBytes, storageLocale),
+        });
+        return;
+      }
+
+      await writeBackup(collectionItems);
+    } catch (error) {
+      console.error(error);
+      showError('exportError');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const confirmExport = async () => {
+    const exportData = stagedExport;
+    setStagedExport(null);
+    if (!exportData) return;
+
+    setIsProcessing(true);
+    try {
+      await writeBackup(exportData.items);
     } catch (error) {
       console.error(error);
       showError('exportError');
@@ -189,8 +251,6 @@ export default function Home() {
       setNotice({ title: t('backupTitle'), message: t('persistenceDenied') });
     }
   };
-
-  const storageLocale = lang === 'zh-TW' ? 'zh-TW' : 'en';
 
   return (
     <div className="home-page">
@@ -413,6 +473,18 @@ export default function Home() {
         onConfirm={confirmImport}
         onCancel={() => setStagedImport(null)}
         destructive
+      />
+      <AppDialog
+        open={Boolean(stagedExport)}
+        title={t('exportLargeTitle')}
+        message={t('exportLargeMessage', {
+          size: stagedExport?.size ?? '',
+          limit: stagedExport?.limit ?? '',
+        })}
+        confirmLabel={t('continue')}
+        cancelLabel={t('cancel')}
+        onConfirm={confirmExport}
+        onCancel={() => setStagedExport(null)}
       />
       <AppDialog
         open={Boolean(notice)}

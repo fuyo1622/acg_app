@@ -75,8 +75,8 @@ npm run audit
 ```
 
 `npm run check` 會依序執行 ESLint、Vitest 測試與 production build。
-`npm run test:e2e` 會建置 App 並執行 Chromium 端對端測試；第一次執行前可先跑
-`npx playwright install chromium` 安裝測試瀏覽器。
+`npm run test:e2e` 會建置 App 並執行 Chromium 與 WebKit 端對端測試；第一次執行前可先跑
+`npx playwright install chromium webkit` 安裝測試瀏覽器。
 
 ## 版本與發佈
 
@@ -101,8 +101,9 @@ npm run audit
 ## 瀏覽器支援範圍
 
 - 核心功能支援 Chrome、Edge、Firefox 與 Safari 的目前及前一個主要版本。
-- 安裝與離線 PWA 流程會持續以 Chromium 做自動化測試；iPhone／iPad 安裝則依賴
-  Safari 的「加入主畫面」功能。
+- 收藏、備份與無障礙流程會持續以 Chromium 及 WebKit 做自動化測試；由於 Playwright 的
+  WebKit 無法模擬離線導覽，service worker 離線啟動僅在 Chromium 測試。iPhone／iPad
+  安裝則依賴 Safari 的「加入主畫面」功能。
 - 容量估算及持久儲存權限由瀏覽器決定；未授權不影響一般使用，但仍需定期匯出。
 - 無痕／私密瀏覽與 App 內嵌瀏覽器不適合長期保存資料，因此不列入支援範圍。
 

@@ -1,7 +1,7 @@
 {
   "name": "acg_app",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local-first Progressive Web App for cataloging ACG merchandise.",
   "license": "MIT",
   "repository": {

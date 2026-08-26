@@ -4,6 +4,7 @@ import AddEditItem from './pages/AddEditItem';
 import ItemDetail from './pages/ItemDetail';
 import Guide from './pages/Guide';
 import Privacy from './pages/Privacy';
+import NotFound from './pages/NotFound';
 import { LanguageProvider } from './contexts/LanguageContext';
 import AppErrorBoundary from './components/ErrorBoundary';
 
@@ -20,6 +21,7 @@ function App() {
               <Route path="/item/:id" element={<ItemDetail />} />
               <Route path="/guide" element={<Guide />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
         </BrowserRouter>

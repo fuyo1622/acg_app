@@ -19,6 +19,14 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    // WebKit approximates the iOS Safari path documented in the README. Playwright's
+    // WebKit does not emulate offline navigation for a service-worker-controlled page,
+    // so that scenario stays a Chromium-only check.
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      grepInvert: /@service-worker/,
+    },
   ],
   webServer: {
     command: 'node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173',

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 export const translations = {
   en: {
@@ -36,7 +36,7 @@ export const translations = {
     
     // Home
     myCollection: 'My Collection',
-    searchPlaceholder: 'Search by series, character...',
+    searchPlaceholder: 'Search series, character, type, notes...',
     noItemsFound: 'No items found',
     tryAdjusting: 'Try adjusting your filters or add a new item.',
     language: 'Language',
@@ -75,6 +75,8 @@ export const translations = {
     saveError: 'Failed to save item. Storage might be full.',
     itemNotFound: 'This item does not exist or has already been deleted.',
     backHome: 'Back to collection',
+    routeNotFoundTitle: 'Page not found',
+    routeNotFoundMessage: 'That address is not part of this app. Your collection is still safe on this device.',
     unexpectedErrorTitle: 'The app could not continue',
     unexpectedErrorMessage: 'Your local data has not been intentionally changed. Reload the app, then export a backup if the problem continues.',
     reloadApp: 'Reload app',
@@ -101,6 +103,8 @@ export const translations = {
     removeMultiValue: 'Remove {value}',
     allSeries: 'All Series',
     allCharacters: 'All Characters',
+    exportLargeTitle: 'Large backup',
+    exportLargeMessage: 'This collection is larger than the import limit ({size} of {limit}). The file will still download, but restoring it may fail or run out of memory. Consider removing large photos or old items first.',
   },
   'zh-TW': {
     // General
@@ -136,7 +140,7 @@ export const translations = {
     
     // Home
     myCollection: '我的收藏',
-    searchPlaceholder: '搜尋系列、角色...',
+    searchPlaceholder: '搜尋系列、角色、類型、備註...',
     noItemsFound: '找不到任何項目',
     tryAdjusting: '請嘗試調整過濾器或新增項目。',
     language: '語言',
@@ -175,6 +179,8 @@ export const translations = {
     saveError: '儲存失敗，儲存空間可能已滿。',
     itemNotFound: '這個項目不存在或已經被刪除。',
     backHome: '返回收藏',
+    routeNotFoundTitle: '找不到頁面',
+    routeNotFoundMessage: '這個網址不屬於這個 App。你的收藏仍安全保存在這台裝置上。',
     unexpectedErrorTitle: 'App 無法繼續執行',
     unexpectedErrorMessage: 'App 並未刻意變更您的本機資料。請重新載入；若問題持續，請儘快匯出備份。',
     reloadApp: '重新載入 App',
@@ -201,6 +207,8 @@ export const translations = {
     removeMultiValue: '移除 {value}',
     allSeries: '所有系列',
     allCharacters: '所有角色',
+    exportLargeTitle: '備份檔過大',
+    exportLargeMessage: '目前收藏超過匯入上限（{size}，上限 {limit}）。檔案仍會下載，但還原時可能失敗或耗盡記憶體。建議先移除大張照片或舊項目。',
   }
 };
 
@@ -216,16 +224,18 @@ export function LanguageProvider({ children }) {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  const t = (key, values = {}) => {
+  const t = useCallback((key, values = {}) => {
     const template = translations[lang]?.[key] || translations.en[key] || key;
     return Object.entries(values).reduce(
       (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
       template,
     );
-  };
+  }, [lang]);
+
+  const value = useMemo(() => ({ lang, setLang, t }), [lang, t]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

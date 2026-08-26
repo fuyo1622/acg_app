@@ -34,7 +34,7 @@ npm run audit
 The first E2E run may require:
 
 ```bash
-npx playwright install chromium
+npx playwright install chromium webkit
 ```
 
 If a change adds or upgrades a dependency, run `npm run notices` and commit both generated
