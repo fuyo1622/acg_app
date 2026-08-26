@@ -581,7 +581,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-## react-router@7.18.1
+## react-router@7.18.2
 
 License: MIT
 Source: https://github.com/remix-run/react-router
@@ -611,7 +611,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-## react-router-dom@7.18.1
+## react-router-dom@7.18.2
 
 License: MIT
 Source: https://github.com/remix-run/react-router
