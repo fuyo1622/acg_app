@@ -12,7 +12,7 @@ Thanks for helping improve ACG Merchandise Collector.
 
 ## Local setup
 
-Requirements: Node.js 20.19–24 and npm.
+Requirements: Node.js 22.12–24 and npm.
 
 ```bash
 npm install

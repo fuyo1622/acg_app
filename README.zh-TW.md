@@ -58,7 +58,7 @@
 
 ## 本機開發
 
-需求：Node.js 20.19–24 與 npm。
+需求：Node.js 22.12–24 與 npm。
 
 ```bash
 npm install

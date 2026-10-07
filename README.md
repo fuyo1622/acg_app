@@ -52,7 +52,7 @@ Open the app online once before testing offline mode. Collection data belongs to
 
 ## Development
 
-Requirements: Node.js 20.19–24 and npm.
+Requirements: Node.js 22.12–24 and npm.
 
 ```bash
 npm install
