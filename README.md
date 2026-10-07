@@ -13,8 +13,10 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 
 - Store collection data and photos locally with IndexedDB.
 - Add, edit, delete, search, and filter merchandise records.
+- Keep a separate wishlist of merchandise you want, with shop links, prices, order
+  deadlines, and priorities. Add several screenshots at once and fill in details later.
 - Capture or select photos and compress large images before storage.
-- Export the collection to one JSON backup and restore it later.
+- Export the collection and wishlist to one JSON backup and restore them later.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.
 - Switch between Traditional Chinese and English.
 
@@ -34,12 +36,13 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 3. Choose **Add to Home Screen**, then **Add**.
 4. Launch **ACG** from the home screen.
 
-Open the app online once before testing offline mode. Collection data belongs to the browser and domain where it was created; export a backup before clearing site data, changing devices, or switching production domains.
+Open the app online once before testing offline mode. Collection and wishlist data belong to the browser and domain where they were created; export a backup before clearing site data, changing devices, or switching production domains.
 
 ## Updates, browser storage, and backups
 
-- Collection data and photos remain in IndexedDB across normal app, cache, and service-worker
-  updates when the same domain, device, browser, and browser profile are used.
+- Collection and wishlist data, photos included, remain in IndexedDB across normal app,
+  cache, and service-worker updates when the same domain, device, browser, and browser
+  profile are used.
 - A normal app release does not require exporting or re-importing JSON. Tested database
   migrations preserve data when the schema changes.
 - JSON is a recovery backup, not an update mechanism. Export periodically and before
@@ -47,8 +50,8 @@ Open the app online once before testing offline mode. Collection data belongs to
   major release.
 - **Protect local data** requests persistent browser storage and can reduce automatic
   eviction, but it cannot protect against manual deletion, device damage, or loss.
-- Backup files may contain collection data, notes, and photos. Store them privately
-  outside the browser.
+- Backup files may contain your collection and wishlist, including notes, shop links,
+  prices, and photos. Store them privately outside the browser.
 
 ## Development
 
@@ -85,20 +88,22 @@ install its browsers with `npx playwright install chromium webkit`.
 ## Architecture and limitations
 
 - React 19, Vite, React Router, Dexie, and `vite-plugin-pwa`.
-- IndexedDB database `acg-merch-db` currently uses schema version 2. The canonical value
-  is `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
+- IndexedDB database `acg-merch-db` currently uses schema version 3, which keeps the
+  collection and the wishlist in separate tables. The canonical value is
+  `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
   Dexie migration and increment that value.
-- No account, backend, cloud sync, or server-side copy of collection data.
-- Backup import replaces the current local collection after confirmation and downloads a
-  safety backup first when the current collection is not empty.
+- No account, backend, cloud sync, or server-side copy of collection or wishlist data.
+- Backup import replaces the current collection and wishlist after confirmation and
+  downloads a safety backup first when either is not empty. A backup made before version
+  0.4.0 holds only the collection, so importing it keeps the current wishlist.
 - Browser storage policies can remove local data; keep exported backups.
 
 ## Browser support
 
 - Core features: the current and previous major releases of Chrome, Edge, Firefox, and
   Safari.
-- Collection, backup, and accessibility flows are continuously tested in Chromium and
-  WebKit. Offline startup from the service-worker cache is tested in Chromium, because
+- Collection, wishlist, backup, and accessibility flows are continuously tested in
+  Chromium and WebKit. Offline startup from the service-worker cache is tested in Chromium, because
   Playwright's WebKit cannot emulate it. iPhone and iPad installation depends on
   Safari's **Add to Home Screen** behavior.
 - Persistent-storage permission and quota estimates are browser decisions; denial does

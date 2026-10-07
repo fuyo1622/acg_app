@@ -6,21 +6,25 @@ import './Privacy.css';
 const content = {
   'zh-TW': {
     title: '隱私與本機資料',
-    effectiveDate: '生效日期：2026-07-23',
+    effectiveDate: '生效日期：2026-10-07',
     back: '返回收藏',
-    summary: 'ACG Collector 是 local-first 的 PWA。收藏內容保存在目前裝置與瀏覽器，不會由 App 程式上傳至專案擁有者的伺服器。',
+    summary: 'ACG Collector 是 local-first 的 PWA。收藏與願望清單保存在目前裝置與瀏覽器，不會由 App 程式上傳至專案擁有者的伺服器。',
     sections: [
       {
         title: '儲存的資料',
-        body: '作品與角色名稱、商品類型、備註及照片會儲存在目前網站網域的 IndexedDB。App 不包含帳號、雲端同步或分析追蹤程式。託管供應商仍可能處理 IP 位址、瀏覽器資訊及請求時間等標準網站紀錄。'
+        body: '收藏與願望清單的內容（作品與角色名稱、商品類型、備註、照片，以及願望清單的商店、連結、價格與下單截止日等）會儲存在目前網站網域的 IndexedDB；介面語言與上次使用的幣別存放在 localStorage。App 不包含帳號、雲端同步或分析追蹤程式。託管供應商仍可能處理 IP 位址、瀏覽器資訊及請求時間等標準網站紀錄。'
       },
       {
         title: '照片與備份',
-        body: '支援的瀏覽器會在裝置端嘗試壓縮照片。匯出的 JSON 備份未加密，可能包含收藏資訊、備註及照片；請將備份視為私人資料妥善保管。匯入會在確認後取代目前收藏；目前收藏不是空的時，App 會先下載安全備份。'
+        body: '支援的瀏覽器會在裝置端嘗試壓縮照片。匯出的 JSON 備份未加密，可能包含收藏與願望清單、備註、連結、價格及照片；請將備份視為私人資料妥善保管。匯入會在確認後取代目前的收藏與願望清單；兩者任一不是空的時，App 會先下載安全備份。'
       },
       {
         title: '資料遺失風險',
         body: '清除網站資料、瀏覽器或作業系統回收空間、更換裝置、瀏覽器或網站網域，都可能使原本資料無法存取。請定期匯出備份；沒有備份時，專案擁有者無法復原本機資料。'
+      },
+      {
+        title: '願望清單連結',
+        body: '願望清單中的連結（例如商店頁面）只會在你點選時於新分頁開啟，且不會傳送來源網址（referrer）。App 不會自行連線到這些網站。開啟後，該網站會依其自身的隱私政策處理 IP 位址等請求資訊。'
       },
       {
         title: '問題回報表單',
@@ -34,21 +38,25 @@ const content = {
   },
   en: {
     title: 'Privacy and local data',
-    effectiveDate: 'Effective date: 2026-07-23',
+    effectiveDate: 'Effective date: 2026-10-07',
     back: 'Back to collection',
-    summary: 'ACG Collector is a local-first PWA. Collection content stays in the current device and browser and is not uploaded by the application code to a server operated by the project owner.',
+    summary: 'ACG Collector is a local-first PWA. Collection and wishlist content stays in the current device and browser and is not uploaded by the application code to a server operated by the project owner.',
     sections: [
       {
         title: 'Data stored',
-        body: 'Series and character names, merchandise types, notes, and photos are stored in IndexedDB for the current website origin. The app has no accounts, cloud sync, or analytics tracking. The hosting provider may still process standard website logs such as IP address, browser information, and request time.'
+        body: 'Collection and wishlist content (series and character names, merchandise types, notes, photos, and wishlist details such as shops, links, prices, and order deadlines) is stored in IndexedDB for the current website origin; the interface language and the last currency used are kept in localStorage. The app has no accounts, cloud sync, or analytics tracking. The hosting provider may still process standard website logs such as IP address, browser information, and request time.'
       },
       {
         title: 'Photos and backups',
-        body: 'Supported browsers attempt to compress photos on the device. Exported JSON backups are not encrypted and may include collection data, notes, and photos; store them as private data. Import replaces the current collection after confirmation; the app first downloads a safety backup when the current collection is not empty.'
+        body: 'Supported browsers attempt to compress photos on the device. Exported JSON backups are not encrypted and may include collection and wishlist data, notes, links, prices, and photos; store them as private data. Import replaces the current collection and wishlist after confirmation; the app first downloads a safety backup when either is not empty.'
       },
       {
         title: 'Risk of data loss',
         body: 'Clearing site data, browser or operating-system storage eviction, or changing device, browser, or website domain can make existing data inaccessible. Export backups regularly. The project owner cannot recover local data without a backup.'
+      },
+      {
+        title: 'Wishlist links',
+        body: 'Links in the wishlist, such as shop pages, open in a new tab only when you select them, and no referrer is sent. The app never contacts these sites on its own. Once opened, a site processes request information such as your IP address under its own privacy policy.'
       },
       {
         title: 'Feedback form',

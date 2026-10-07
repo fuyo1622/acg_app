@@ -7,7 +7,7 @@ const content = {
   'zh-TW': {
     title: '使用說明',
     back: '返回收藏',
-    intro: '收藏資料會保存在目前裝置的瀏覽器。一般 App 更新不需要重新匯出或匯入 JSON。',
+    intro: '收藏與願望清單會保存在目前裝置的瀏覽器。一般 App 更新不需要重新匯出或匯入 JSON。',
     sections: [
       {
         title: '新增與管理收藏',
@@ -18,9 +18,18 @@ const content = {
         ],
       },
       {
+        title: '願望清單',
+        items: [
+          '切換到「願望清單」分頁記錄想買的周邊；照片、名稱或連結擇一即可儲存，其他欄位都可之後補上。',
+          '「一次加入多張截圖」可一次選擇最多 30 張圖片，每張各自成為一個項目。',
+          '可記錄商店連結、價格、下單截止日、發售時間與優先度；7 天內到期的截止日會特別標示，狀態改為「已下單」後就不再提醒。',
+          '願望清單和收藏分開存放，兩者都會包含在 JSON 備份中。',
+        ],
+      },
+      {
         title: '瀏覽器儲存與 App 更新',
         items: [
-          '收藏與照片存放在目前網域的 IndexedDB，綁定目前裝置、瀏覽器及使用者設定檔。',
+          '收藏、願望清單與照片存放在目前網域的 IndexedDB，綁定目前裝置、瀏覽器及使用者設定檔。',
           '使用相同網域與瀏覽器時，一般程式、快取或 Service Worker 更新會保留收藏，不需要重新匯入 JSON。',
           '「保護本機資料」可降低瀏覽器自動清除資料的機率，但無法防止手動清除、裝置損壞或遺失。',
         ],
@@ -30,8 +39,9 @@ const content = {
         items: [
           'JSON 是復原用安全備份，不是每次更新 App 都必須執行的步驟。',
           '請定期匯出，並在清除網站資料、更換裝置／瀏覽器／網域或重大更新前另外保存。',
-          '備份可能包含收藏、備註及照片，請存放在瀏覽器以外的私人安全位置。',
-          '匯入會取代目前收藏；目前收藏不是空的時，App 會先自動下載安全備份。',
+          '備份可能包含收藏、願望清單、備註及照片，請存放在瀏覽器以外的私人安全位置。',
+          '匯入會取代目前的收藏與願望清單；兩者任一不是空的時，App 會先自動下載安全備份。',
+          '0.4.0 之前建立的備份只含收藏，匯入時會保留目前的願望清單。',
         ],
       },
       {
@@ -47,7 +57,7 @@ const content = {
   en: {
     title: 'User guide',
     back: 'Back to collection',
-    intro: 'Collection data stays in this device and browser. Normal app updates do not require exporting or importing JSON again.',
+    intro: 'Your collection and wishlist stay in this device and browser. Normal app updates do not require exporting or importing JSON again.',
     sections: [
       {
         title: 'Add and manage items',
@@ -58,9 +68,18 @@ const content = {
         ],
       },
       {
+        title: 'Wishlist',
+        items: [
+          'Open the Wishlist tab to track merchandise you want. A photo, a name, or a link is enough to save an entry; fill in the rest later.',
+          'Add screenshots lets you pick up to 30 images at once, and each one becomes its own entry.',
+          'Record shop links, prices, order deadlines, release times, and priorities. Deadlines within 7 days are highlighted, and the reminder stops once the status is Ordered.',
+          'The wishlist is stored apart from your collection, and JSON backups include both.',
+        ],
+      },
+      {
         title: 'Browser storage and app updates',
         items: [
-          'Collections and photos are stored in IndexedDB for the current domain, device, browser, and browser profile.',
+          'Your collection, wishlist, and photos are stored in IndexedDB for the current domain, device, browser, and browser profile.',
           'On the same domain and browser, normal code, cache, or service-worker updates keep collection data and do not require a JSON import.',
           'Protect local data can reduce automatic browser eviction, but it cannot prevent manual deletion, device damage, or loss.',
         ],
@@ -70,8 +89,9 @@ const content = {
         items: [
           'JSON is a recovery backup, not a required step for every app update.',
           'Export periodically and before clearing site data, changing device, browser, or domain, or installing a major update.',
-          'A backup may contain collection data, notes, and photos. Store it privately outside the browser.',
-          'Import replaces the current collection. If it is not empty, the app downloads a safety backup first.',
+          'A backup may contain your collection, wishlist, notes, and photos. Store it privately outside the browser.',
+          'Import replaces the current collection and wishlist. If either is not empty, the app downloads a safety backup first.',
+          'A backup made before version 0.4.0 holds only the collection, so importing it keeps your current wishlist.',
         ],
       },
       {
