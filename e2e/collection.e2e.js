@@ -70,6 +70,14 @@ test('shows a recoverable page for an unknown address', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
 });
 
+test('returns to the collection from an edit address that is not a number', async ({ page }) => {
+  await useEnglish(page);
+  await page.goto('/edit/abc');
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
+});
+
 test('leaves a directly opened edit page for the item instead of the browser history', async ({ page }) => {
   await useEnglish(page);
   await addItem(page);

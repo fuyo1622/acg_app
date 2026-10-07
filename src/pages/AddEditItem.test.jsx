@@ -260,4 +260,21 @@ describe('AddEditItem smoke flows', () => {
       expect(routerMocks.navigate).toHaveBeenCalledWith('/', { replace: true });
     });
   });
+
+  it('treats an id that is not a number as a missing item instead of querying it', async () => {
+    routerMocks.params = { id: 'abc' };
+    // IndexedDB rejects NaN as a key, which would reach the error boundary.
+    dbMocks.items.get.mockRejectedValue(new DOMException('Not a valid key', 'DataError'));
+    let itemQuery;
+    vi.mocked(useLiveQuery).mockImplementation((query) => {
+      const source = query.toString();
+      if (source.includes('db.items.get')) itemQuery = query;
+      return source.includes('db.items.toArray') ? [] : undefined;
+    });
+
+    renderForm();
+
+    await expect(itemQuery()).resolves.toEqual({ item: null });
+    expect(dbMocks.items.get).not.toHaveBeenCalled();
+  });
 });
