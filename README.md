@@ -14,7 +14,8 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 - Store collection data and photos locally with IndexedDB.
 - Add, edit, delete, search, and filter merchandise records.
 - Keep a separate wishlist of merchandise you want, with shop links, prices, order
-  deadlines, and priorities. Add several screenshots at once and fill in details later.
+  deadlines, and priorities. Add several screenshots at once and fill in details later,
+  and move an entry into the collection when it arrives.
 - Capture or select photos and compress large images before storage.
 - Export the collection and wishlist to one JSON backup and restore them later.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.
