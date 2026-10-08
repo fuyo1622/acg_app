@@ -1,4 +1,5 @@
 import {
+  BACKUP_LIMITS,
   DEFAULT_WISHLIST_CURRENCY,
   WISHLIST_CURRENCIES,
   WISHLIST_DEADLINE_SOON_DAYS,
@@ -179,6 +180,21 @@ export function getWishlistTitle(entry, separator) {
   return entry?.name?.trim()
     || formatValues(entry?.character, separator)
     || formatValues(entry?.series, separator);
+}
+
+// The collection has no name, price, or shop fields, so an entry moved there keeps them at
+// the top of its notes, within the notes limit that backup import enforces. The price is
+// saved with its currency code: a symbol such as "$" means NT$ in Chinese but US$ in
+// English, and these notes stay as written whichever language is shown later.
+export function notesForCollection(entry, locale) {
+  const price = typeof entry?.price === 'number' && Number.isFinite(entry.price)
+    ? `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(entry.price)} ${entry.currency || DEFAULT_WISHLIST_CURRENCY}`
+    : '';
+  const purchase = [price, entry?.shop?.trim()].filter(Boolean).join(' · ');
+  return [entry?.name?.trim(), purchase, entry?.notes?.trim()]
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, BACKUP_LIMITS.maxNotesLength);
 }
 
 // The line under the title: the series when the title already names the item or the

@@ -32,7 +32,9 @@ const photoTest = test.extend({
     });
     await use(context.pages()[0] ?? await context.newPage());
     await context.close();
-    await rm(profileDir, { recursive: true, force: true });
+    // On Windows, WebKit can hold its database files for a moment after closing. A
+    // leftover folder in the system temp directory is harmless, so cleanup never fails a test.
+    await rm(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => {});
   },
 });
 
@@ -101,6 +103,40 @@ photoTest('adds one wishlist entry per chosen screenshot', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Untitled' })).toHaveCount(2);
   await expect(page.getByRole('img', { name: 'Untitled' })).toHaveCount(2);
+});
+
+photoTest('moves an arrived entry into the collection with its wishlist photo', async ({ page }) => {
+  await useEnglish(page);
+  await openWishlist(page);
+
+  await page.getByRole('button', { name: 'Add to Wishlist' }).click();
+  await page.getByLabel('Add Photo').setInputFiles(png('screenshot.png'));
+  await page.getByLabel('Name', { exact: true }).fill('Asuka 1/7 scale figure');
+  await page.getByLabel('Price', { exact: true }).fill('12800');
+  await page.getByLabel('Currency').selectOption('JPY');
+  await page.getByLabel('Shop', { exact: true }).fill('AmiAmi');
+  await page.getByRole('button', { name: 'Add to Wishlist' }).click();
+
+  await page.getByRole('link', { name: /Asuka 1\/7 scale figure/ }).click();
+  await page.getByRole('button', { name: 'Move to collection' }).click();
+  await expect(page.getByRole('img', { name: 'Wishlist photo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip and use the wishlist photo' }).click();
+
+  // The collection needs a series or character and a type, which this entry lacks.
+  await page.getByRole('combobox', { name: 'Series / Franchise' }).fill('Evangelion');
+  await page.getByRole('option', { name: 'Add "Evangelion"' }).click();
+  await page.getByLabel('Merchandise Type').selectOption('figure');
+  await expect(page.getByLabel('Notes (Optional)')).toHaveValue('Asuka 1/7 scale figure\n12,800 JPY · AmiAmi');
+  await page.getByRole('button', { name: 'Move to collection' }).click();
+
+  await expect(page).toHaveURL(/\/item\/\d+$/);
+  await expect(page.getByRole('img', { name: 'Evangelion' })).toBeVisible();
+  await expect(page.getByText(/12,800 JPY · AmiAmi/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Back to collection' }).click();
+  await expect(page.getByRole('link', { name: /Evangelion/ })).toBeVisible();
+  await openWishlist(page);
+  await expect(page.getByText('Your wishlist is empty')).toBeVisible();
 });
 
 test('restores the wishlist from the shared backup file', async ({ page }) => {
@@ -272,5 +308,9 @@ test('has no serious automated accessibility violations on wishlist screens', as
   await page.getByRole('button', { name: 'Add to Wishlist' }).click();
   await page.getByRole('link', { name: /Asuka figure/ }).click();
   await expect(page.getByRole('heading', { name: 'Asuka figure', level: 1 })).toBeVisible();
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
+
+  await page.getByRole('button', { name: 'Move to collection' }).click();
+  await expect(page.getByRole('button', { name: 'Take or choose a photo' })).toBeVisible();
   expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
 });

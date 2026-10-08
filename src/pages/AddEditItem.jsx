@@ -2,23 +2,28 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Camera, PackageCheck, Save, Trash2 } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import MultiSelectCombobox from '../components/MultiSelectCombobox';
 import AppDialog from '../components/AppDialog';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useObjectUrl } from '../hooks/useObjectUrl';
 import { DEFAULT_TYPES } from '../utils/constants';
 import { validateItem } from '../utils/validationUtils';
 import { getUniqueValues } from '../utils/filterUtils';
 import { compressImage } from '../utils/imageUtils';
 import { isSameValue, toValueArray } from '../utils/valueUtils';
+import { getWishlistTitle, notesForCollection } from '../utils/wishlistUtils';
 import './AddEditItem.css';
 
-export default function AddEditItem() {
+// With mode="move" (/wishlist/move/:id) the form turns a wishlist entry into a collection
+// item: the id is the entry's, and saving adds the item and removes the entry.
+export default function AddEditItem({ mode }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const { t, lang } = useLanguage();
-  const isEditing = !!id;
+  const isMoving = mode === 'move';
+  const isEditing = !isMoving && !!id;
 
   const [formData, setFormData] = useState({
     series: [],
@@ -27,14 +32,20 @@ export default function AddEditItem() {
     notes: '',
   });
   const [photo, setPhoto] = useState(null);
-  const [loading, setLoading] = useState(isEditing);
+  const [loading, setLoading] = useState(isEditing || isMoving);
   const [isSaving, setIsSaving] = useState(false);
   const [customType, setCustomType] = useState('');
   const [notice, setNotice] = useState(null);
   const [deletePromptOpen, setDeletePromptOpen] = useState(false);
+  // Moving starts by asking for a photo of the item that arrived.
+  const [isPhotoStepDone, setIsPhotoStepDone] = useState(!isMoving);
+  const movePhotoInputRef = useRef(null);
 
-  const itemId = Number.parseInt(id, 10);
-  const exitPath = isEditing ? `/item/${id}` : '/';
+  // The collection item's id when editing, the wishlist entry's id when moving.
+  const recordId = Number.parseInt(id, 10);
+  let exitPath = '/';
+  if (isMoving) exitPath = `/wishlist/item/${id}`;
+  else if (isEditing) exitPath = `/item/${id}`;
 
   // Fetch all items for autocomplete
   const allItems = useLiveQuery(() => db.items.toArray());
@@ -43,31 +54,43 @@ export default function AddEditItem() {
     [allItems],
   );
 
-  // Fetch item if editing. The wrapper object separates "still loading" from "not found".
-  // An id that is not a number is not a valid IndexedDB key, so it counts as not found.
+  // Fetch the item being edited or the entry being moved. The wrapper objects separate
+  // "still loading" from "not found". An id that is not a number is not a valid IndexedDB
+  // key, so it counts as not found.
   const loadedItem = useLiveQuery(
     async () => {
       if (!isEditing) return null;
-      if (!Number.isInteger(itemId)) return { item: null };
-      return { item: (await db.items.get(itemId)) ?? null };
+      if (!Number.isInteger(recordId)) return { item: null };
+      return { item: (await db.items.get(recordId)) ?? null };
     },
-    [itemId, isEditing],
+    [recordId, isEditing],
   );
+  const loadedEntry = useLiveQuery(
+    async () => {
+      if (!isMoving) return null;
+      if (!Number.isInteger(recordId)) return { entry: null };
+      return { entry: (await db.wishlist.get(recordId)) ?? null };
+    },
+    [recordId, isMoving],
+  );
+  const movingEntry = isMoving ? loadedEntry?.entry : null;
+  const wishlistPhotoUrl = useObjectUrl(movingEntry?.photo);
 
   // Fill the form once, and only after the type list has loaded. Classifying the type
   // against an empty list would push an already-listed type into the free-text box.
   const isFormInitialized = useRef(false);
   useEffect(() => {
-    if (!isEditing || isFormInitialized.current) return;
-    if (!loadedItem || allItems === undefined) return;
+    if (!(isEditing || isMoving) || isFormInitialized.current) return;
+    const loaded = isMoving ? loadedEntry : loadedItem;
+    if (!loaded || allItems === undefined) return;
 
-    const { item } = loadedItem;
-    if (!item) {
-      navigate('/', { replace: true });
+    const record = isMoving ? loaded.entry : loaded.item;
+    if (!record) {
+      navigate(isMoving ? '/wishlist' : '/', { replace: true });
       return;
     }
 
-    let selectedType = item.merchandise_type;
+    let selectedType = record.merchandise_type || '';
     const listedType = [...DEFAULT_TYPES, ...uniqueCustomTypes]
       .find(type => isSameValue(type, selectedType));
 
@@ -79,15 +102,15 @@ export default function AddEditItem() {
     }
 
     setFormData({
-      series: toValueArray(item.series),
-      character: toValueArray(item.character),
+      series: toValueArray(record.series),
+      character: toValueArray(record.character),
       merchandise_type: selectedType,
-      notes: item.notes || '',
+      notes: isMoving ? notesForCollection(record, lang) : (record.notes || ''),
     });
-    setPhoto(item.photo);
+    setPhoto(record.photo ?? null);
     isFormInitialized.current = true;
     setLoading(false);
-  }, [isEditing, loadedItem, allItems, uniqueCustomTypes, navigate]);
+  }, [isEditing, isMoving, loadedItem, loadedEntry, allItems, uniqueCustomTypes, navigate, lang]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -100,6 +123,13 @@ export default function AddEditItem() {
 
   const handleImageSelected = (file) => {
     setPhoto(file);
+  };
+
+  const handleMovePhoto = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPhoto(file);
+    setIsPhotoStepDone(true);
   };
 
   const handleSubmit = async (e) => {
@@ -135,16 +165,25 @@ export default function AddEditItem() {
         updated_at: new Date()
       };
 
-      if (isEditing) {
-        await db.items.update(itemId, itemData);
+      // An explicit destination: /edit/:id can be opened directly, where there is no
+      // in-app history entry to go back to.
+      let destination = exitPath;
+      if (isMoving) {
+        itemData.created_at = new Date();
+        // One transaction, so the entry leaves the wishlist only once the item is saved.
+        await db.transaction('rw', db.items, db.wishlist, async () => {
+          const newItemId = await db.items.add(itemData);
+          await db.wishlist.delete(recordId);
+          destination = `/item/${newItemId}`;
+        });
+      } else if (isEditing) {
+        await db.items.update(recordId, itemData);
       } else {
         itemData.created_at = new Date();
         await db.items.add(itemData);
       }
 
-      // An explicit destination: /edit/:id can be opened directly, where there is no
-      // in-app history entry to go back to.
-      navigate(exitPath, { replace: true });
+      navigate(destination, { replace: true });
     } catch (error) {
       console.error("Error saving item:", error);
       setNotice({ title: t('errorTitle'), message: t('saveError') });
@@ -156,7 +195,7 @@ export default function AddEditItem() {
     setDeletePromptOpen(false);
     setIsSaving(true);
     try {
-      await db.items.delete(itemId);
+      await db.items.delete(recordId);
       navigate('/');
     } catch (error) {
       console.error("Error deleting item:", error);
@@ -167,23 +206,70 @@ export default function AddEditItem() {
 
   if (loading) return <div className="loading">{t('loading')}</div>;
 
+  let title = t('newItem');
+  if (isMoving) title = t('moveToCollection');
+  else if (isEditing) title = t('editItem');
+
+  const header = (
+    <header className="page-header">
+      <button className="back-btn" onClick={() => navigate(exitPath)} aria-label={t('cancel')} disabled={isSaving}>
+        <ArrowLeft size={24} />
+      </button>
+      <h2>{title}</h2>
+      {isEditing && (
+        <button className="delete-btn" onClick={() => setDeletePromptOpen(true)} aria-label={t('deleteConfirm')} disabled={isSaving}>
+          <Trash2 size={24} color="var(--danger)" />
+        </button>
+      )}
+    </header>
+  );
+
+  if (!isPhotoStepDone) {
+    const separator = lang === 'en' ? ', ' : '、';
+    return (
+      <div className="form-page">
+        {header}
+        <section className="move-photo-step glass-panel" aria-labelledby="move-photo-title">
+          <h3 id="move-photo-title">{getWishlistTitle(movingEntry, separator) || t('untitledEntry')}</h3>
+          <p>{t('movePhotoPrompt')}</p>
+          {wishlistPhotoUrl && (
+            <img className="move-wishlist-photo" src={wishlistPhotoUrl} alt={t('moveWishlistPhoto')} />
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            aria-label={t('movePhotoFile')}
+            className="sr-only"
+            ref={movePhotoInputRef}
+            onChange={handleMovePhoto}
+          />
+          <div className="move-photo-actions">
+            <button type="button" className="btn btn-primary" onClick={() => movePhotoInputRef.current?.click()}>
+              <Camera size={20} aria-hidden="true" />
+              {t('moveTakePhoto')}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsPhotoStepDone(true)}>
+              {t(movingEntry?.photo ? 'moveSkipUseWishlistPhoto' : 'moveSkip')}
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  let submitLabel = t('addItem');
+  if (isSaving) submitLabel = t('saving');
+  else if (isMoving) submitLabel = t('moveToCollection');
+  else if (isEditing) submitLabel = t('saveChanges');
+
   return (
     <div className="form-page">
-      <header className="page-header">
-        <button className="back-btn" onClick={() => navigate(exitPath)} aria-label={t('cancel')} disabled={isSaving}>
-          <ArrowLeft size={24} />
-        </button>
-        <h2>{isEditing ? t('editItem') : t('newItem')}</h2>
-        {isEditing && (
-          <button className="delete-btn" onClick={() => setDeletePromptOpen(true)} aria-label={t('deleteConfirm')} disabled={isSaving}>
-            <Trash2 size={24} color="var(--danger)" />
-          </button>
-        )}
-      </header>
+      {header}
 
       <form onSubmit={handleSubmit} className="item-form">
         <ImageUploader defaultImage={photo} onImageSelected={handleImageSelected} />
-        
+        {isMoving && <p className="move-form-hint">{t('moveFormHint')}</p>}
+
         <div className="form-group">
           <label htmlFor="series">{t('seriesFranchise')}</label>
           <MultiSelectCombobox
@@ -263,8 +349,9 @@ export default function AddEditItem() {
             {t('cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={isSaving}>
-             {isSaving ? <span className="loading-spinner"></span> : <Save size={20} />}
-             {isSaving ? t('saving') : (isEditing ? t('saveChanges') : t('addItem'))}
+             {isSaving && <span className="loading-spinner"></span>}
+             {!isSaving && (isMoving ? <PackageCheck size={20} /> : <Save size={20} />)}
+             {submitLabel}
           </button>
         </div>
       </form>

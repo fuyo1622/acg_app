@@ -26,6 +26,7 @@ function App() {
               <Route path="/wishlist/add" element={<AddEditWishlistEntry />} />
               <Route path="/wishlist/edit/:id" element={<AddEditWishlistEntry />} />
               <Route path="/wishlist/item/:id" element={<WishlistDetail />} />
+              <Route path="/wishlist/move/:id" element={<AddEditItem mode="move" />} />
               <Route path="/guide" element={<Guide />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />

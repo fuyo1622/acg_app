@@ -98,6 +98,16 @@ describe('WishlistDetail', () => {
     expect(routerMocks.navigate).toHaveBeenCalledWith('/wishlist/edit/7');
   });
 
+  it('offers to move an arrived entry into the collection', () => {
+    vi.mocked(useLiveQuery).mockReturnValue(entry({ status: 'ordered' }));
+    renderDetail();
+
+    expect(screen.getByText(/Moving adds it to your collection and removes it from the wishlist/))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Move to collection' }));
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/wishlist/move/7');
+  });
+
   it('stops warning about the deadline once the entry is ordered', () => {
     vi.mocked(useLiveQuery).mockReturnValue(entry({ status: 'ordered' }));
     renderDetail();

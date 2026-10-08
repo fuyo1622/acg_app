@@ -250,6 +250,20 @@
   white-space: pre-wrap;
 }
 
+.wishlist-move {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.wishlist-move p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .wishlist-added-on {
   margin-top: 2rem;
   font-size: 0.8rem;
