@@ -31,4 +31,11 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // Playwright fixtures hand their value to a `use` callback, which is not React's use().
+    files: ['e2e/**/*.js'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
 ])

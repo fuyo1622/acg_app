@@ -1,4 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -9,14 +11,30 @@ const PNG_BYTES = Buffer.from(
 );
 const png = name => ({ name, mimeType: 'image/png', buffer: PNG_BYTES });
 
-// Playwright's Windows build of WebKit cannot store any Blob in IndexedDB, even without
-// the app. Safari can, and CI runs WebKit on Linux, so only that local combination skips.
-function skipWithoutBlobStorage(browserName) {
-  test.skip(
-    browserName === 'webkit' && process.platform === 'win32',
-    'Playwright WebKit on Windows cannot store Blobs in IndexedDB',
-  );
-}
+// Playwright gives every WebKit test a temporary, private-browsing-like profile, and WebKit
+// does not store Blobs in IndexedDB there, on any platform. Safari's normal profiles do, so
+// tests that save photos run WebKit with a profile on disk. It lives in a short temporary
+// folder: WebKit nests its IndexedDB files deeply, and below the test output folder they
+// would pass the Windows path limit and fail to open.
+const photoTest = test.extend({
+  page: async ({ page, browserName, playwright, baseURL, viewport, userAgent, deviceScaleFactor }, use) => {
+    if (browserName !== 'webkit') {
+      await use(page);
+      return;
+    }
+
+    const profileDir = await mkdtemp(join(tmpdir(), 'acg-webkit-'));
+    const context = await playwright.webkit.launchPersistentContext(profileDir, {
+      baseURL,
+      viewport,
+      userAgent,
+      deviceScaleFactor,
+    });
+    await use(context.pages()[0] ?? await context.newPage());
+    await context.close();
+    await rm(profileDir, { recursive: true, force: true });
+  },
+});
 
 async function useEnglish(page) {
   await page.goto('/');
@@ -40,8 +58,7 @@ function seriousViolations(results) {
   return results.violations.filter(violation => ['serious', 'critical'].includes(violation.impact));
 }
 
-test('keeps a wishlist entry with a photo and links out of the collection', async ({ page, browserName }) => {
-  skipWithoutBlobStorage(browserName);
+photoTest('keeps a wishlist entry with a photo and links out of the collection', async ({ page }) => {
   await useEnglish(page);
   await openWishlist(page);
   await expect(page.getByText('Your wishlist is empty')).toBeVisible();
@@ -57,6 +74,7 @@ test('keeps a wishlist entry with a photo and links out of the collection', asyn
   await page.getByRole('button', { name: 'Add to Wishlist' }).click();
 
   await expect(page.getByRole('heading', { name: 'Asuka 1/7 scale figure' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Asuka 1/7 scale figure' })).toBeVisible();
   await expect(page.getByText('¥12,800')).toBeVisible();
 
   await page.getByRole('link', { name: /Asuka 1\/7 scale figure/ }).click();
@@ -73,8 +91,7 @@ test('keeps a wishlist entry with a photo and links out of the collection', asyn
   await expect(page.getByRole('link', { name: /Asuka 1\/7 scale figure/ })).toHaveCount(0);
 });
 
-test('adds one wishlist entry per chosen screenshot', async ({ page, browserName }) => {
-  skipWithoutBlobStorage(browserName);
+photoTest('adds one wishlist entry per chosen screenshot', async ({ page }) => {
   await useEnglish(page);
   await openWishlist(page);
 
@@ -83,6 +100,7 @@ test('adds one wishlist entry per chosen screenshot', async ({ page, browserName
   await page.getByRole('button', { name: 'Close' }).click();
 
   await expect(page.getByRole('heading', { name: 'Untitled' })).toHaveCount(2);
+  await expect(page.getByRole('img', { name: 'Untitled' })).toHaveCount(2);
 });
 
 test('restores the wishlist from the shared backup file', async ({ page }) => {
