@@ -1,20 +1,20 @@
 # ACG Collector Privacy Notice
 
-Effective date: 2026-07-23
+Effective date: 2026-10-08
 
 ## 繁體中文
 
 ### 資料儲存
 
-ACG Collector 是 local-first 的 Progressive Web App。收藏項目、作品與角色名稱、商品類型、備註及照片會儲存在使用者目前瀏覽器的 IndexedDB。App 程式不會將這些收藏內容傳送至專案擁有者的伺服器，也不包含帳號、雲端同步或分析追蹤程式。
+ACG Collector 是 local-first 的 Progressive Web App。收藏與願望清單的內容會儲存在使用者目前瀏覽器的 IndexedDB，包括作品與角色名稱、商品類型、備註、照片，以及願望清單的商品名稱、商店、連結、價格與幣別、下單截止日、發售時間、優先度與狀態。介面語言與上次使用的幣別會儲存在瀏覽器的 localStorage。App 程式不會將這些內容傳送至專案擁有者的伺服器，也不包含帳號、雲端同步或分析追蹤程式。
 
-網站託管服務仍可能依其一般運作方式處理標準 HTTP 請求資訊，例如 IP 位址、瀏覽器資訊、請求時間與所存取的檔案。這些託管服務紀錄不包含儲存在 IndexedDB 中的收藏內容。
+網站託管服務仍可能依其一般運作方式處理標準 HTTP 請求資訊，例如 IP 位址、瀏覽器資訊、請求時間與所存取的檔案。這些託管服務紀錄不包含儲存在 IndexedDB 中的收藏與願望清單內容。
 
 ### 照片與備份
 
-照片在支援的瀏覽器中會先於裝置端嘗試壓縮，再儲存在 IndexedDB。匯出的 JSON 備份未加密，可能包含收藏名稱、備註及以 Data URL 編碼的照片。請將備份視為私人資料並妥善保管。
+照片在支援的瀏覽器中會先於裝置端嘗試壓縮，再儲存在 IndexedDB。匯出的 JSON 備份未加密，可能包含收藏與願望清單的名稱、備註、連結、價格及以 Data URL 編碼的照片。請將備份視為私人資料並妥善保管。
 
-匯入備份會在確認後取代目前的收藏。除非使用者自行匯出備份，專案擁有者無法復原遺失的本機資料。
+匯入備份會在確認後取代目前的收藏與願望清單；0.4.0 之前建立的備份只含收藏，匯入時會保留目前的願望清單。除非使用者自行匯出備份，專案擁有者無法復原遺失的本機資料。
 
 ### 資料保留與刪除
 
@@ -25,6 +25,10 @@ ACG Collector 是 local-first 的 Progressive Web App。收藏項目、作品與
 ### 外部服務
 
 App runtime 不會載入 Google Fonts 或其他第三方字型服務。正式網站由託管供應商提供 HTTPS 與靜態檔案傳輸；供應商的資料處理依其隱私政策辦理。
+
+### 願望清單連結
+
+願望清單中儲存的連結（例如商店頁面）只有在使用者點選時，才會在新分頁開啟該外部網站。App 只儲存 http／https 網址，開啟連結時不會傳送 App 的網址作為來源（referrer），也不會自行連線到這些網站或讀取其內容。開啟後，該網站會依其一般運作方式處理 IP 位址、瀏覽器資訊等請求資訊，並依其自身的隱私政策處理資料。
 
 ### 問題回報表單
 
@@ -40,15 +44,15 @@ App runtime 不會載入 Google Fonts 或其他第三方字型服務。正式網
 
 ### Data storage
 
-ACG Collector is a local-first Progressive Web App. Collection entries, series and character names, merchandise types, notes, and photos are stored in IndexedDB in the user's current browser. The application code does not send this collection content to a server operated by the project owner and does not include accounts, cloud synchronization, or analytics tracking.
+ACG Collector is a local-first Progressive Web App. Collection and wishlist content is stored in IndexedDB in the user's current browser: series and character names, merchandise types, notes, and photos, plus each wishlist entry's name, shop, links, price and currency, order deadline, release time, priority, and status. The interface language and the last currency used are stored in the browser's localStorage. The application code does not send this content to a server operated by the project owner and does not include accounts, cloud synchronization, or analytics tracking.
 
-The hosting provider may process standard HTTP request information, such as IP addresses, browser information, request times, and requested static files, as part of normal hosting operations. Hosting logs do not include collection content stored in IndexedDB.
+The hosting provider may process standard HTTP request information, such as IP addresses, browser information, request times, and requested static files, as part of normal hosting operations. Hosting logs do not include collection or wishlist content stored in IndexedDB.
 
 ### Photos and backups
 
-Supported browsers attempt to compress selected photos on the device before storing them in IndexedDB. Exported JSON backups are not encrypted and may contain collection names, notes, and photos encoded as Data URLs. Treat backup files as private data and store them securely.
+Supported browsers attempt to compress selected photos on the device before storing them in IndexedDB. Exported JSON backups are not encrypted and may contain collection and wishlist names, notes, links, prices, and photos encoded as Data URLs. Treat backup files as private data and store them securely.
 
-Importing a backup replaces the current collection after confirmation. The project owner cannot recover lost local data unless the user previously exported a backup.
+Importing a backup replaces the current collection and wishlist after confirmation. A backup made before version 0.4.0 holds only the collection, so importing it keeps the current wishlist. The project owner cannot recover lost local data unless the user previously exported a backup.
 
 ### Retention and deletion
 
@@ -59,6 +63,10 @@ Users can delete all application data through their browser's site-data settings
 ### External services
 
 The application runtime does not load Google Fonts or another third-party font service. The production hosting provider supplies HTTPS and static file delivery and processes data under its own privacy policy.
+
+### Wishlist links
+
+Links saved in the wishlist, such as shop pages, open the external site in a new tab only when the user selects them. The app stores only http and https addresses, does not send its own address as the referrer when a link opens, and does not contact these sites or read their content on its own. Once opened, the site processes standard request information, such as the IP address and browser information, under its own privacy policy.
 
 ### Feedback form
 

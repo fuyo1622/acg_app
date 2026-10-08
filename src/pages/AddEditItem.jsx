@@ -44,8 +44,13 @@ export default function AddEditItem() {
   );
 
   // Fetch item if editing. The wrapper object separates "still loading" from "not found".
+  // An id that is not a number is not a valid IndexedDB key, so it counts as not found.
   const loadedItem = useLiveQuery(
-    async () => (isEditing ? { item: (await db.items.get(itemId)) ?? null } : null),
+    async () => {
+      if (!isEditing) return null;
+      if (!Number.isInteger(itemId)) return { item: null };
+      return { item: (await db.items.get(itemId)) ?? null };
+    },
     [itemId, isEditing],
   );
 

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
-import { replaceItemsInDb } from '../utils/backupUtils';
+import { replaceBackupInDb } from '../utils/backupUtils';
 import { APP_RELEASE_URL, APP_VERSION } from '../utils/version';
 import Home from './Home';
 
@@ -17,11 +17,14 @@ const dbMocks = vi.hoisted(() => ({
       })),
     })),
   },
+  wishlist: {
+    toArray: vi.fn(),
+  },
   transaction: vi.fn(),
 }));
 
 const backupMocks = vi.hoisted(() => ({
-  replaceItemsInDb: vi.fn(),
+  replaceBackupInDb: vi.fn(),
 }));
 
 vi.mock('dexie-react-hooks', () => ({
@@ -36,7 +39,7 @@ vi.mock('../utils/backupUtils', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    replaceItemsInDb: backupMocks.replaceItemsInDb,
+    replaceBackupInDb: backupMocks.replaceBackupInDb,
   };
 });
 
@@ -74,6 +77,37 @@ function collectionItem(id, photoBytes) {
   };
 }
 
+function readBlobText(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
+function wishlistEntry(id, name) {
+  return {
+    id,
+    name,
+    series: [],
+    character: [],
+    merchandise_type: '',
+    links: [],
+    price: null,
+    currency: 'TWD',
+    shop: '',
+    order_deadline: null,
+    release: '',
+    priority: 'medium',
+    status: 'want',
+    notes: '',
+    photo: null,
+    created_at: new Date('2026-01-01T00:00:00.000Z'),
+    updated_at: new Date('2026-01-01T00:00:00.000Z'),
+  };
+}
+
 // Each photo stays under the per-photo limit; together they pass the 50 MiB file limit.
 function oversizedCollection() {
   return Array.from({ length: 8 }, (_, index) => collectionItem(index + 1, 8 * 1024 * 1024));
@@ -85,12 +119,13 @@ describe('Home smoke flows', () => {
     vi.mocked(useLiveQuery).mockReturnValue([]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     dbMocks.items.toArray.mockResolvedValue([]);
-    backupMocks.replaceItemsInDb.mockResolvedValue(undefined);
-    vi.stubGlobal('URL', {
-      ...globalThis.URL,
-      createObjectURL: vi.fn(() => 'blob:backup'),
-      revokeObjectURL: vi.fn(),
-    });
+    dbMocks.wishlist.toArray.mockResolvedValue([]);
+    backupMocks.replaceBackupInDb.mockResolvedValue(undefined);
+    // A subclass keeps `new URL()` working for link validation while object URLs are faked.
+    const TestUrl = class extends globalThis.URL {};
+    TestUrl.createObjectURL = vi.fn(() => 'blob:backup');
+    TestUrl.revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', TestUrl);
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   });
 
@@ -181,7 +216,7 @@ describe('Home smoke flows', () => {
       expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
         .toHaveTextContent('Invalid backup file or corrupted payload version.');
     });
-    expect(replaceItemsInDb).not.toHaveBeenCalled();
+    expect(replaceBackupInDb).not.toHaveBeenCalled();
   });
 
   it('downloads an automatic safety backup before replacing current items', async () => {
@@ -219,23 +254,91 @@ describe('Home smoke flows', () => {
     fireEvent.change(screen.getByLabelText('Import backup file'), {
       target: { files: [importFile] },
     });
-    expect(await screen.findByRole('alertdialog', { name: 'Import Backup' }))
-      .toHaveTextContent('safety backup');
+    const importDialog = await screen.findByRole('alertdialog', { name: 'Import Backup' });
+    expect(importDialog).toHaveTextContent('safety backup');
+    expect(importDialog).toHaveTextContent('keep your current wishlist');
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => {
       expect(URL.createObjectURL).toHaveBeenCalled();
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
-      expect(replaceItemsInDb).toHaveBeenCalledWith(dbMocks, [
-        expect.objectContaining({
-          id: 2,
-          series: ['Imported Series'],
-          character: [],
-          merchandise_type: 'plush',
-        }),
-      ]);
+      expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
+        items: [
+          expect.objectContaining({
+            id: 2,
+            series: ['Imported Series'],
+            character: [],
+            merchandise_type: 'plush',
+          }),
+        ],
+        wishlist: undefined,
+      });
     });
+  });
+
+  it('replaces the wishlist too when a version 3 backup is imported', async () => {
+    dbMocks.wishlist.toArray.mockResolvedValue([wishlistEntry(1, 'Current wish')]);
+    renderHome();
+
+    const importFile = new File(['backup'], 'backup.json', { type: 'application/json' });
+    Object.defineProperty(importFile, 'text', {
+      value: vi.fn().mockResolvedValue(JSON.stringify({
+        version: 3,
+        items: [],
+        wishlist: [{
+          id: 4,
+          name: 'Imported wish',
+          links: [{ url: 'https://www.amiami.com/item', label: '' }],
+          status: 'ordered',
+          created_at: '2026-02-01T00:00:00.000Z',
+        }],
+      })),
+    });
+
+    fireEvent.change(screen.getByLabelText('Import backup file'), {
+      target: { files: [importFile] },
+    });
+    expect(await screen.findByRole('alertdialog', { name: 'Import Backup' }))
+      .toHaveTextContent('REPLACE your current collection and wishlist');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      // The current wishlist alone is enough to trigger the safety backup.
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+      expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
+        items: [],
+        wishlist: [expect.objectContaining({ id: 4, name: 'Imported wish', status: 'ordered' })],
+      });
+    });
+  });
+
+  it('exports the wishlist in the same backup file as the collection', async () => {
+    dbMocks.items.toArray.mockResolvedValue([collectionItem(1, 0)]);
+    dbMocks.wishlist.toArray.mockResolvedValue([wishlistEntry(5, 'Rei plush')]);
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+    const [backupBlob] = vi.mocked(URL.createObjectURL).mock.calls
+      .map(([blob]) => blob)
+      .filter(blob => blob.type === 'application/json');
+    const exported = JSON.parse(await readBlobText(backupBlob));
+    expect(exported.version).toBe(3);
+    expect(exported.items).toHaveLength(1);
+    expect(exported.wishlist).toEqual([expect.objectContaining({ id: 5, name: 'Rei plush' })]);
+  });
+
+  it('links the collection and wishlist tabs', () => {
+    renderHome();
+
+    const tabs = screen.getByRole('navigation', { name: 'Lists' });
+    expect(within(tabs).getByRole('link', { name: 'Collection' })).toHaveAttribute('aria-current', 'page');
+    expect(within(tabs).getByRole('link', { name: 'Wishlist' })).toHaveAttribute('href', '/wishlist');
   });
   it('warns before exporting a backup that exceeds the import limit', async () => {
     const items = oversizedCollection();

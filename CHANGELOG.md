@@ -6,6 +6,46 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-08
+
+### Added
+
+- A wishlist for merchandise you want, kept apart from the collection. An entry needs
+  only a photo, a name, or a link, and can also hold up to 10 shop links, a price and
+  currency, the shop, an order deadline, the release time, a priority, a status (want or
+  ordered), series, characters, a type, and notes.
+- Quick add for the wishlist: choose up to 30 screenshots at once, and each becomes its
+  own entry to complete later.
+- Wishlist sorting by newest, order deadline, or priority, filters by status and
+  priority, and search across names, shops, notes, and link labels and hosts. Order
+  deadlines within 7 days are highlighted and passed ones are flagged until the entry is
+  ordered.
+- A wishlist section in the in-app guide and a wishlist links section in the privacy
+  notice.
+- Tests for the wishlist utilities, pages, card, backups, and translations, plus
+  end-to-end coverage for wishlist entries with photos and links, quick add, backup round
+  trips, importing an older backup, the version 2 database upgrade, offline wishlist
+  pages, and wishlist accessibility.
+
+### Changed
+
+- Backups use version 3 and hold both the collection and the wishlist. Importing an older
+  backup replaces only the collection and keeps the current wishlist; the confirmation
+  says which applies. The safety backup made before an import includes the wishlist.
+- The IndexedDB schema moves to version 3, which adds a separate wishlist table. Existing
+  collections carry over unchanged.
+- The collection and the wishlist share one header for language, backups, and storage.
+- Development now requires Node.js 22.12–24, because the test runner moved from Vitest 3
+  to Vitest 5.
+
+### Fixed
+
+- Opening an edit address with a non-numeric id, such as `/edit/abc`, returns to the
+  collection instead of replacing the app with an error screen.
+- Updated development dependencies to clear critical and high-severity advisories
+  reported by `npm audit` in tinypool, source-map-js, brace-expansion, fast-uri, and
+  js-yaml. Runtime dependencies were not affected.
+
 ## [0.3.0] - 2026-08-26
 
 ### Added

@@ -59,6 +59,38 @@
   opacity: 0.55;
 }
 
+.list-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  padding: 0.25rem;
+}
+
+.list-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.list-tab:hover {
+  color: var(--text-main);
+  background: var(--bg-card-hover);
+}
+
+.list-tab.is-active {
+  color: white;
+  background: var(--accent-gradient);
+}
+
 .storage-status {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -312,6 +344,14 @@
   color: var(--accent-text);
   font-size: 1.1rem;
   font-weight: 500;
+}
+
+/* The header holds the tabs, storage panel, and filters. In a short window a sticky
+   header would cover the whole gallery, so it scrolls away there as on phones. */
+@media (max-height: 760px) {
+  .home-header {
+    position: static;
+  }
 }
 
 @media (max-width: 620px) {
