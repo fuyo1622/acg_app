@@ -19,6 +19,12 @@ const dbMocks = vi.hoisted(() => ({
     get: vi.fn(),
     delete: vi.fn(),
   },
+  wishlist: {
+    get: vi.fn(),
+    delete: vi.fn(),
+  },
+  // The callback follows the mode and however many tables the transaction names.
+  transaction: vi.fn(async (...args) => args.at(-1)()),
 }));
 
 const imageMocks = vi.hoisted(() => ({
@@ -42,17 +48,18 @@ vi.mock('../utils/imageUtils', () => ({
   compressImage: imageMocks.compressImage,
 }));
 
-function renderForm() {
+function renderForm(props = {}) {
   return render(
     <LanguageProvider>
-      <AddEditItem />
+      <AddEditItem {...props} />
     </LanguageProvider>
   );
 }
 
-// `editItem` mirrors the component's own contract: `undefined` while the query is in
-// flight, `{ item: null }` once Dexie confirms the id does not exist.
-function mockLiveQueries({ allItems = [], editItem } = {}) {
+// `editItem` and `moveEntry` mirror the component's own contract: `undefined` while the
+// query is in flight, `{ item: null }` or `{ entry: null }` once Dexie confirms the id
+// does not exist.
+function mockLiveQueries({ allItems = [], editItem, moveEntry } = {}) {
   vi.mocked(useLiveQuery).mockImplementation((query) => {
     const source = query.toString();
 
@@ -64,8 +71,35 @@ function mockLiveQueries({ allItems = [], editItem } = {}) {
       return editItem === undefined ? undefined : { item: editItem };
     }
 
+    if (source.includes('db.wishlist.get')) {
+      return moveEntry === undefined ? undefined : { entry: moveEntry };
+    }
+
     return undefined;
   });
+}
+
+function wishlistEntry(fields = {}) {
+  return {
+    id: 7,
+    name: 'Asuka figure',
+    series: ['Evangelion'],
+    character: ['Asuka'],
+    merchandise_type: 'figure',
+    links: [{ url: 'https://www.amiami.com/item', label: 'AmiAmi' }],
+    price: 12800,
+    currency: 'JPY',
+    shop: 'AmiAmi',
+    order_deadline: null,
+    release: '',
+    priority: 'high',
+    status: 'ordered',
+    notes: 'Bonus postcard',
+    photo: new Blob(['wishlist photo'], { type: 'image/png' }),
+    created_at: new Date('2026-09-01T00:00:00.000Z'),
+    updated_at: new Date('2026-09-01T00:00:00.000Z'),
+    ...fields,
+  };
 }
 
 function addNewMultiValue(label, value) {
@@ -258,6 +292,84 @@ describe('AddEditItem smoke flows', () => {
 
     await waitFor(() => {
       expect(routerMocks.navigate).toHaveBeenCalledWith('/', { replace: true });
+    });
+  });
+
+  it('asks for a photo first, then moves the entry with the wishlist photo when skipped', async () => {
+    const entry = wishlistEntry();
+    routerMocks.params = { id: '7' };
+    dbMocks.items.add.mockResolvedValue(42);
+    dbMocks.wishlist.delete.mockResolvedValue(undefined);
+    mockLiveQueries({ moveEntry: entry });
+
+    const { container } = renderForm({ mode: 'move' });
+
+    expect(screen.getByRole('heading', { name: 'Move to collection' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Asuka figure' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Wishlist photo' })).toBeInTheDocument();
+    expect(container.querySelector('form')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip and use the wishlist photo' }));
+
+    expect(screen.getByLabelText('Notes (Optional)'))
+      .toHaveValue('Asuka figure\n12,800 JPY · AmiAmi\nBonus postcard');
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => {
+      expect(routerMocks.navigate).toHaveBeenCalledWith('/item/42', { replace: true });
+    });
+    expect(dbMocks.transaction)
+      .toHaveBeenCalledWith('rw', dbMocks.items, dbMocks.wishlist, expect.any(Function));
+    expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({
+      series: ['Evangelion'],
+      character: ['Asuka'],
+      merchandise_type: 'figure',
+      photo: entry.photo,
+    }));
+    expect(dbMocks.wishlist.delete).toHaveBeenCalledWith(7);
+    expect(compressImage).not.toHaveBeenCalled();
+  });
+
+  it('moves the entry with a newly chosen photo instead of the wishlist photo', async () => {
+    routerMocks.params = { id: '7' };
+    dbMocks.items.add.mockResolvedValue(42);
+    mockLiveQueries({ moveEntry: wishlistEntry() });
+    const arrivedPhoto = new File(['arrived'], 'arrived.jpg', { type: 'image/jpeg' });
+
+    const { container } = renderForm({ mode: 'move' });
+    fireEvent.change(screen.getByLabelText('Photo of the arrived item'), { target: { files: [arrivedPhoto] } });
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => {
+      expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({ photo: arrivedPhoto }));
+    });
+    expect(compressImage).toHaveBeenCalledWith(arrivedPhoto);
+  });
+
+  it('asks for the fields the collection requires before moving an entry', () => {
+    routerMocks.params = { id: '7' };
+    mockLiveQueries({
+      moveEntry: wishlistEntry({ series: [], character: [], merchandise_type: '', photo: null }),
+    });
+
+    const { container } = renderForm({ mode: 'move' });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
+      .toHaveTextContent('Please enter at least a series or character.');
+    expect(dbMocks.transaction).not.toHaveBeenCalled();
+    expect(dbMocks.wishlist.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns to the wishlist when the entry to move does not exist', async () => {
+    routerMocks.params = { id: '99' };
+    mockLiveQueries({ moveEntry: null });
+
+    renderForm({ mode: 'move' });
+
+    await waitFor(() => {
+      expect(routerMocks.navigate).toHaveBeenCalledWith('/wishlist', { replace: true });
     });
   });
 

@@ -8,6 +8,7 @@ import {
   getWishlistSubtitle,
   getWishlistTitle,
   isDateKey,
+  notesForCollection,
   parsePrice,
   prepareLinks,
   prepareWishlistEntry,
@@ -176,6 +177,22 @@ describe('formatPrice', () => {
 
   it('falls back to plain text for a currency code Intl rejects', () => {
     expect(formatPrice(12, 'XX', 'en')).toBe('12 XX');
+  });
+});
+
+describe('notesForCollection', () => {
+  it('keeps the name, price, shop and notes that the collection has no fields for', () => {
+    const entry = { name: ' Asuka figure ', price: 12800, currency: 'JPY', shop: 'AmiAmi', notes: 'Bonus postcard' };
+
+    expect(notesForCollection(entry, 'en')).toBe('Asuka figure\n12,800 JPY · AmiAmi\nBonus postcard');
+    expect(notesForCollection({ ...entry, price: 3200, currency: 'TWD' }, 'zh-TW'))
+      .toBe('Asuka figure\n3,200 TWD · AmiAmi\nBonus postcard');
+    expect(notesForCollection({ ...entry, price: null }, 'en')).toBe('Asuka figure\nAmiAmi\nBonus postcard');
+    expect(notesForCollection({ name: '', price: null, shop: '', notes: '' }, 'en')).toBe('');
+  });
+
+  it('stays within the notes limit that backup import enforces', () => {
+    expect(notesForCollection({ name: 'Asuka figure', notes: 'x'.repeat(6000) }, 'en')).toHaveLength(5000);
   });
 });
 

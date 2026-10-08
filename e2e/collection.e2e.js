@@ -78,6 +78,26 @@ test('returns to the collection from an edit address that is not a number', asyn
   await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
 });
 
+test('keeps the storage panel hidden until it is shown again', async ({ page }) => {
+  await useEnglish(page);
+  const reportsStorage = await page.evaluate(() => Boolean(navigator.storage?.estimate));
+  test.skip(!reportsStorage, 'This browser does not report storage usage');
+
+  const panel = page.getByRole('region', { name: 'Browser storage' });
+  await panel.getByRole('button', { name: 'Hide storage details' }).click();
+  await expect(panel).toHaveCount(0);
+
+  await page.reload();
+  const showStorage = page.getByRole('button', { name: 'Show storage details' });
+  await expect(showStorage).toBeVisible();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole('link', { name: 'Wishlist', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+
+  await showStorage.click();
+  await expect(panel).toBeVisible();
+});
+
 test('leaves a directly opened edit page for the item instead of the browser history', async ({ page }) => {
   await useEnglish(page);
   await addItem(page);

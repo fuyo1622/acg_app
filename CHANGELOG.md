@@ -6,6 +6,18 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
+### Added
+
+- Move to collection: a wishlist entry's page offers to move it into the collection once
+  it arrives. The app first asks for a new photo, from the camera or the photo library,
+  and keeps the wishlist photo when that step is skipped. The entry's name, price (with
+  its currency code), and shop go into the item's notes, and the entry leaves the
+  wishlist in the same save.
+- The browser storage panel can be hidden to save space on small screens and shown again
+  from a storage button in the header. It always shows when storage is nearly full.
+
 ## [0.4.0] - 2026-10-08
 
 ### Added

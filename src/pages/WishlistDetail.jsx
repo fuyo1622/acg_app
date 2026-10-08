@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Edit2, ExternalLink, ImageOff, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Edit2, ExternalLink, ImageOff, MessageSquare, PackageCheck } from 'lucide-react';
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
@@ -157,6 +157,18 @@ export default function WishlistDetail() {
             <p className="wishlist-notes">{entry.notes}</p>
           </div>
         )}
+
+        <div className="wishlist-move">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate(`/wishlist/move/${entry.id}`)}
+          >
+            <PackageCheck size={20} aria-hidden="true" />
+            {t('moveToCollection')}
+          </button>
+          <p>{t('moveToCollectionHint')}</p>
+        </div>
 
         <div className="wishlist-added-on">
           {t('addedOn')} {new Date(entry.created_at).toLocaleDateString()}

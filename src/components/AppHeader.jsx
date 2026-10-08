@@ -8,6 +8,7 @@ import {
   Package,
   ShieldCheck,
   Upload,
+  X,
 } from 'lucide-react';
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -63,6 +64,25 @@ function backupFilename(prefix) {
 
 const tabClassName = ({ isActive }) => `list-tab${isActive ? ' is-active' : ''}`;
 
+const STORAGE_PANEL_HIDDEN_KEY = 'storagePanelHidden';
+
+function readStoragePanelHidden() {
+  try {
+    return localStorage.getItem(STORAGE_PANEL_HIDDEN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function saveStoragePanelHidden(hidden) {
+  try {
+    if (hidden) localStorage.setItem(STORAGE_PANEL_HIDDEN_KEY, 'true');
+    else localStorage.removeItem(STORAGE_PANEL_HIDDEN_KEY);
+  } catch {
+    // Remembering the choice is a convenience; the panel still hides for this visit.
+  }
+}
+
 // Shared by the collection and the wishlist. One backup file holds both lists, so export,
 // import, and storage controls stay reachable from either tab.
 export default function AppHeader({ title, storageRefreshKey, children }) {
@@ -72,7 +92,9 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   const [stagedImport, setStagedImport] = useState(null);
   const [stagedExport, setStagedExport] = useState(null);
   const [storageStatus, setStorageStatus] = useState(null);
+  const [storageHidden, setStorageHidden] = useState(readStoragePanelHidden);
   const fileInputRef = useRef(null);
+  const showStorageRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -203,6 +225,23 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
+  // The panel takes room on small screens, so it can be hidden. A nearly-full warning
+  // shows regardless, because it asks the user to act before data is lost.
+  const storageNearFull = isStorageNearCapacity(storageStatus);
+  const storageVisible = Boolean(storageStatus?.supported) && (!storageHidden || storageNearFull);
+
+  const hideStorage = () => {
+    setStorageHidden(true);
+    saveStoragePanelHidden(true);
+    // The hide button disappears with the panel; keep keyboard focus on its counterpart.
+    setTimeout(() => showStorageRef.current?.focus(), 0);
+  };
+
+  const showStorage = () => {
+    setStorageHidden(false);
+    saveStoragePanelHidden(false);
+  };
+
   const importWarningKey = stagedImport && !hasWishlistSection(stagedImport.payload)
     ? 'importWarningKeepsWishlist'
     : 'importWarning';
@@ -257,6 +296,18 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
               ref={fileInputRef}
               onChange={handleImport}
             />
+            {storageStatus?.supported && !storageVisible && (
+              <button
+                type="button"
+                ref={showStorageRef}
+                onClick={showStorage}
+                className="btn-icon glass-panel"
+                title={t('showStorage')}
+                aria-label={t('showStorage')}
+              >
+                <HardDrive size={18} aria-hidden="true" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -271,9 +322,9 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
           </NavLink>
         </nav>
 
-        {storageStatus?.supported && (
+        {storageVisible && (
           <section
-            className={`storage-status glass-panel ${isStorageNearCapacity(storageStatus) ? 'storage-warning' : ''}`}
+            className={`storage-status glass-panel ${storageNearFull ? 'storage-warning' : ''}`}
             aria-label={t('storageLabel')}
           >
             <HardDrive size={20} aria-hidden="true" />
@@ -287,7 +338,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
                 {' · '}
                 {t(storageStatus.persistent ? 'storagePersistent' : 'storageBestEffort')}
               </p>
-              {isStorageNearCapacity(storageStatus) && (
+              {storageNearFull && (
                 <p className="storage-warning-text" role="alert">{t('storageWarning')}</p>
               )}
             </div>
@@ -295,6 +346,17 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
               <button type="button" className="btn btn-secondary storage-protect-btn" onClick={handlePersistentStorage}>
                 <ShieldCheck size={18} aria-hidden="true" />
                 {t('protectStorage')}
+              </button>
+            )}
+            {!storageNearFull && (
+              <button
+                type="button"
+                className="storage-hide-btn"
+                onClick={hideStorage}
+                title={t('hideStorage')}
+                aria-label={t('hideStorage')}
+              >
+                <X size={18} aria-hidden="true" />
               </button>
             )}
           </section>
