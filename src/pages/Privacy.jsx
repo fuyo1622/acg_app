@@ -6,7 +6,7 @@ import './Privacy.css';
 const content = {
   'zh-TW': {
     title: '隱私與本機資料',
-    effectiveDate: '生效日期：2026-10-07',
+    effectiveDate: '生效日期：2026-10-08',
     back: '返回收藏',
     summary: 'ACG Collector 是 local-first 的 PWA。收藏與願望清單保存在目前裝置與瀏覽器，不會由 App 程式上傳至專案擁有者的伺服器。',
     sections: [
@@ -38,7 +38,7 @@ const content = {
   },
   en: {
     title: 'Privacy and local data',
-    effectiveDate: 'Effective date: 2026-10-07',
+    effectiveDate: 'Effective date: 2026-10-08',
     back: 'Back to collection',
     summary: 'ACG Collector is a local-first PWA. Collection and wishlist content stays in the current device and browser and is not uploaded by the application code to a server operated by the project owner.',
     sections: [

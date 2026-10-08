@@ -1,6 +1,6 @@
 # ACG Collector Privacy Notice
 
-Effective date: 2026-10-07
+Effective date: 2026-10-08
 
 ## 繁體中文
 

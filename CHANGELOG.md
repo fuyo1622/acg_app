@@ -6,7 +6,7 @@ for published releases.
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-10-07
+## [0.4.0] - 2026-10-08
 
 ### Added
 
