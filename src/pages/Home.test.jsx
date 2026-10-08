@@ -108,6 +108,18 @@ function wishlistEntry(id, name) {
   };
 }
 
+// jsdom has no StorageManager, so the storage panel only renders with this stand-in.
+function stubStorageManager({ usage = 100, quota = 1000 } = {}) {
+  Object.defineProperty(navigator, 'storage', {
+    configurable: true,
+    value: {
+      estimate: vi.fn().mockResolvedValue({ usage, quota }),
+      persisted: vi.fn().mockResolvedValue(false),
+      persist: vi.fn().mockResolvedValue(false),
+    },
+  });
+}
+
 // Each photo stays under the per-photo limit; together they pass the 50 MiB file limit.
 function oversizedCollection() {
   return Array.from({ length: 8 }, (_, index) => collectionItem(index + 1, 8 * 1024 * 1024));
@@ -134,6 +146,39 @@ describe('Home smoke flows', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    delete navigator.storage;
+    localStorage.removeItem('storagePanelHidden');
+  });
+
+  it('hides the storage panel, remembers the choice, and shows it again from the header', async () => {
+    stubStorageManager();
+    const { unmount } = renderHome();
+
+    const panel = await screen.findByRole('region', { name: 'Browser storage' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Hide storage details' }));
+
+    expect(screen.queryByRole('region', { name: 'Browser storage' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Show storage details' })).toHaveFocus();
+    });
+
+    unmount();
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show storage details' }));
+
+    expect(screen.getByRole('region', { name: 'Browser storage' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show storage details' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a nearly full storage warning visible even after the panel was hidden', async () => {
+    localStorage.setItem('storagePanelHidden', 'true');
+    stubStorageManager({ usage: 900, quota: 1000 });
+    renderHome();
+
+    const panel = await screen.findByRole('region', { name: 'Browser storage' });
+    expect(within(panel).getByRole('alert')).toHaveTextContent('nearly full');
+    expect(within(panel).queryByRole('button', { name: 'Hide storage details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show storage details' })).not.toBeInTheDocument();
   });
 
   it('renders safely with an empty collection', () => {

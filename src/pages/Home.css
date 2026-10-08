@@ -93,11 +93,34 @@
 
 .storage-status {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0.75rem;
   margin-top: 0.75rem;
   padding: 0.75rem 1rem;
+}
+
+/* Pinned to the last column of the first row, so the protect button can wrap below it
+   on narrow screens. */
+.storage-hide-btn {
+  grid-column: -2 / -1;
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.storage-hide-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card-hover);
 }
 
 .storage-status p {
@@ -360,7 +383,7 @@
   }
 
   .storage-status {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .storage-protect-btn {
