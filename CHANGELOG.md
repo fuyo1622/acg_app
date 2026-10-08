@@ -6,6 +6,8 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
 ### Added
 
 - Move to collection: a wishlist entry's page offers to move it into the collection once
