@@ -18,6 +18,9 @@ for published releases.
 - Collection items can be saved without a series, character, or type. They are marked
   Needs details, the home page counts them and can list only them, and the item page
   says what is missing with a button to fill it in.
+- Swipe between items: on an item or wishlist entry page, swipe left or right, use the
+  ‹ › buttons at the top, or press the arrow keys to go to the next or previous one, in the
+  order and filters of the list it was opened from. Back still returns to the list.
 
 ### Changed
 

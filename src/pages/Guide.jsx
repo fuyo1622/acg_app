@@ -17,6 +17,7 @@ const content = {
           '「匯入相簿」一次最多可匯入 100 張照片，也能按「加入照片」分好幾次、從不同相簿挑。每張先各自成為一個項目，點選同一個商品的照片再按「合併」，第一張會成為封面。按「全部加入」後，新項目會標成「待補資料」。',
           '首頁的「待補資料」列可只顯示還沒填完的項目；點開項目再按「補上資料」即可補齊。',
           '點收藏卡片可查看內容，再使用編輯按鈕修改或刪除。',
+          '在項目頁左右滑動，或按上方的 ‹ ›，可切換到上一個或下一個項目；順序和清單一樣，包含目前的篩選。',
         ],
       },
       {
@@ -75,6 +76,7 @@ const content = {
           'Import album takes up to 100 photos, and Add photos lets you pick them in several rounds, also from different albums. Each photo starts as its own item; select the photos of one item and tap Merge, and the first becomes the cover. After Add all, the new items are marked Needs details.',
           'The Needs details bar on the home page can show only the unfinished items. Open one and select Fill in details to complete it.',
           'Open a collection card to view it, then use Edit Item to make changes or delete it.',
+          "On an item's page, swipe left or right, or use ‹ › at the top, to go to the next or previous item, in the list's order with its current filters.",
         ],
       },
       {
