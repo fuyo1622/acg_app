@@ -13,10 +13,14 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 
 - Store collection data and photos locally with IndexedDB.
 - Add, edit, delete, search, and filter merchandise records.
+- Import an album: choose up to 30 photos at once, merge the photos of the same item,
+  and fill in the series, character, and type later. Items still missing them are marked
+  Needs details and can be listed on their own.
 - Keep a separate wishlist of merchandise you want, with shop links, prices, order
-  deadlines, and priorities. Add several screenshots at once and fill in details later,
+  deadlines, and priorities. Import several screenshots at once and fill in details later,
   and move an entry into the collection when it arrives.
-- Capture or select photos and compress large images before storage.
+- Keep up to 10 photos per item or entry, capture or select them, and compress large
+  images before storage.
 - Export the collection and wishlist to one JSON backup and restore them later.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.
 - Switch between Traditional Chinese and English.
@@ -89,14 +93,16 @@ install its browsers with `npx playwright install chromium webkit`.
 ## Architecture and limitations
 
 - React 19, Vite, React Router, Dexie, and `vite-plugin-pwa`.
-- IndexedDB database `acg-merch-db` currently uses schema version 3, which keeps the
-  collection and the wishlist in separate tables. The canonical value is
+- IndexedDB database `acg-merch-db` currently uses schema version 4, which keeps the
+  collection and the wishlist in separate tables and stores each record's photos as a
+  list, cover first. The canonical value is
   `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
   Dexie migration and increment that value.
 - No account, backend, cloud sync, or server-side copy of collection or wishlist data.
 - Backup import replaces the current collection and wishlist after confirmation and
   downloads a safety backup first when either is not empty. A backup made before version
-  0.4.0 holds only the collection, so importing it keeps the current wishlist.
+  0.4.0 holds only the collection, so importing it keeps the current wishlist. Backups
+  from versions with one photo per record still restore.
 - Browser storage policies can remove local data; keep exported backups.
 
 ## Browser support

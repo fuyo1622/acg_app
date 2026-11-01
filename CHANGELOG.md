@@ -6,6 +6,33 @@ for published releases.
 
 ## [Unreleased]
 
+### Added
+
+- Import album, in both the collection and the wishlist: choose up to 30 photos at once.
+  Each photo starts as its own item; select the photos of one item and tap Merge (the
+  first becomes the cover), split a merged item again, or leave photos out, then add them
+  all in one step.
+- Items and wishlist entries hold up to 10 photos. The first is the cover and can be
+  changed; item and entry pages show the photos with thumbnails, and cards show how many
+  there are.
+- Collection items can be saved without a series, character, or type. They are marked
+  Needs details, the home page counts them and can list only them, and the item page
+  says what is missing with a button to fill it in.
+
+### Changed
+
+- Album import replaces the wishlist's quick add.
+- Moving a wishlist entry into the collection can take several new photos, and keeps all
+  of the entry's photos when the photo step is skipped.
+- Database schema version 4 stores each record's photos as a list; an existing photo
+  becomes the cover during the upgrade. Backups use format version 4 with a list of photos
+  per record, and backups from earlier versions still restore.
+
+### Security
+
+- Updated Vite to 6.4.5 and patched build-tool dependencies for new advisories. They
+  affect the development server and build, not the published app.
+
 ## [0.5.0] - 2026-10-09
 
 ### Added
