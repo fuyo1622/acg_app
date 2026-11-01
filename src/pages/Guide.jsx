@@ -43,7 +43,9 @@ const content = {
         items: [
           '備份是復原用的安全備份，不是每次更新 App 都必須執行的步驟。',
           '備份檔是 .zip 檔，照片以圖片檔存在裡面；舊版的 .json 備份也能匯入。',
-          '在 iPhone 或 iPad 上，備份準備好後按「儲存」，再選「儲存到檔案」。',
+          '在 iPhone 或 iPad 上，備份準備好後按「儲存」→「儲存到檔案」。存檔畫面上方會顯示要存到哪個資料夾，可點一下改成「我的 iPhone」或「iCloud 雲碟」。',
+          '找不到備份檔時，打開「檔案」App，看「最近項目」或搜尋「acg-backup」。',
+          '匯入時若選檔畫面停在「iCloud 雲碟」，點下方「瀏覽」就能換到「我的 iPhone」等其他位置；備份存在哪裡都能匯入。',
           '請定期匯出，並在清除網站資料、更換裝置／瀏覽器／網域或重大更新前另外保存。',
           '備份可能包含收藏、願望清單、備註及照片，請存放在瀏覽器以外的私人安全位置。',
           '匯入會取代目前的收藏與願望清單；兩者任一不是空的時，App 會先儲存一份安全備份。',
@@ -99,7 +101,9 @@ const content = {
         items: [
           'A backup is for recovery, not a required step for every app update.',
           'A backup is a .zip file with the photos inside as image files. Backups from earlier versions, which are .json files, can still be imported.',
-          'On iPhone or iPad, tap Save when the backup is ready, then choose Save to Files.',
+          'On iPhone or iPad, tap Save when the backup is ready, then Save to Files. The top of that screen shows the folder it saves to; tap it to choose another, such as On My iPhone or iCloud Drive.',
+          'If you cannot find a backup, open the Files app and look in Recents, or search for "acg-backup".',
+          'When importing, if the file picker opens in iCloud Drive, tap Browse at the bottom to go to On My iPhone or another location. A backup can be imported from any of them.',
           'Export periodically and before clearing site data, changing device, browser, or domain, or installing a major update.',
           'A backup may contain your collection, wishlist, notes, and photos. Store it privately outside the browser.',
           'Import replaces the current collection and wishlist. If either is not empty, the app saves a safety backup first.',

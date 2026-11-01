@@ -31,7 +31,7 @@ for published releases.
   into JSON. Restoring reads the photos straight from the file, so a large backup no
   longer has to fit in memory. JSON backups from earlier versions still import.
 - On iPhone and iPad, a backup is saved through the share sheet once it is ready (tap
-  Save, then Save to Files). The safety backup before an import is saved the same way,
+  Save, then Save to Files), and the app then names the file and says where to find it. The safety backup before an import is saved the same way,
   and if it is not saved, the app asks before replacing the current data.
 
 ### Fixed

@@ -479,6 +479,7 @@ describe('Home smoke flows', () => {
 
       const ready = await screen.findByRole('dialog', { name: 'Backup ready' });
       expect(ready).toHaveTextContent('Save to Files');
+      expect(ready).toHaveTextContent(/acg-backup-\d{4}-\d{2}-\d{2}\.zip/);
       expect(navigator.share).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -488,6 +489,25 @@ describe('Home smoke flows', () => {
       expect(file.name).toMatch(/^acg-backup-\d{4}-\d{2}-\d{2}\.zip$/);
       const archive = await readZip(file);
       expect(JSON.parse(await archive.text('backup.json')).items).toEqual([expect.objectContaining({ id: 1 })]);
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+
+      // The share sheet picks the folder, so the app says how to find the file afterwards.
+      const found = await screen.findByRole('dialog', { name: 'Where to find the backup' });
+      expect(found).toHaveTextContent('Recents');
+      expect(found).toHaveTextContent(file.name);
+    });
+
+    it('says nothing more when the share sheet is closed without saving', async () => {
+      navigator.share.mockRejectedValue(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+      renderHome();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        expect(navigator.share).toHaveBeenCalled();
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
     });
 
@@ -501,6 +521,8 @@ describe('Home smoke flows', () => {
       await waitFor(() => {
         expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
       });
+      expect(await screen.findByRole('dialog', { name: 'Where to find the backup' }))
+        .toHaveTextContent('Downloads folder');
     });
 
     it('asks before replacing data when the safety backup was not saved', async () => {

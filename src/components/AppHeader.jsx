@@ -153,10 +153,18 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
-  const saveReadyExport = () => {
+  // The share sheet decides where the file goes, so the app names it and says where to look.
+  const saveReadyExport = async () => {
     const file = readyExport;
     setReadyExport(null);
-    if (file) shareFile(file);
+    if (!file) return;
+
+    const result = await shareFile(file);
+    if (result === 'cancelled') return;
+    setNotice({
+      title: t('backupSavedTitle'),
+      message: t(result === 'shared' ? 'backupSharedMessage' : 'backupDownloadedMessage', { name: file.name }),
+    });
   };
 
   const handleImport = async (event) => {
@@ -402,6 +410,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         open={Boolean(readyExport)}
         title={t('exportReadyTitle')}
         message={t('exportReadyMessage', {
+          name: readyExport?.name ?? '',
           size: readyExport ? formatBytes(readyExport.size, storageLocale) : '',
         })}
         confirmLabel={t('saveBackup')}
