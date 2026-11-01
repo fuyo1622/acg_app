@@ -14,7 +14,7 @@ const content = {
         items: [
           '點右下角「新增項目」，填寫作品系列或角色名稱，並選擇周邊類型；資料不齊也可以先儲存，項目會標成「待補資料」。',
           '每個項目最多可放 10 張照片，第一張是封面，按其他照片上的星號可改設封面；備註為選填。首頁可搜尋及依類型、系列或角色篩選。',
-          '「匯入相簿」可一次選擇最多 30 張照片：每張先各自成為一個項目，點選同一個商品的照片再按「合併」，第一張會成為封面。按「全部加入」後，新項目會標成「待補資料」。',
+          '「匯入相簿」一次最多可匯入 100 張照片，也能按「加入照片」分好幾次、從不同相簿挑。每張先各自成為一個項目，點選同一個商品的照片再按「合併」，第一張會成為封面。按「全部加入」後，新項目會標成「待補資料」。',
           '首頁的「待補資料」列可只顯示還沒填完的項目；點開項目再按「補上資料」即可補齊。',
           '點收藏卡片可查看內容，再使用編輯按鈕修改或刪除。',
         ],
@@ -23,7 +23,7 @@ const content = {
         title: '願望清單',
         items: [
           '切換到「願望清單」分頁記錄想買的周邊；照片、名稱或連結擇一即可儲存，其他欄位都可之後補上。',
-          '「匯入相簿」可一次選擇最多 30 張照片或截圖，同一個商品的照片可合併成一個項目，細節之後再補。',
+          '「匯入相簿」一次最多可匯入 100 張照片或截圖，也可以分次挑；同一個商品的照片可合併成一個項目，細節之後再補。',
           '可記錄商店連結、價格、下單截止日、發售時間與優先度；7 天內到期的截止日會特別標示，狀態改為「已下單」後就不再提醒。',
           '收到商品後，在項目頁按「移到收藏」：先拍實品照片或選新照片（略過則沿用願望清單的照片），補上資料後儲存，項目就會移到收藏。',
           '願望清單和收藏分開存放，兩者都會包含在 JSON 備份中。',
@@ -68,7 +68,7 @@ const content = {
         items: [
           'Select Add Item in the lower-right corner, enter a series or character, and choose a merchandise type. You can also save without them; the item is then marked Needs details.',
           'An item can hold up to 10 photos. The first is the cover; tap the star on another photo to make it the cover. Notes are optional. Use the home page to search or filter by type, series, or character.',
-          'Import album lets you choose up to 30 photos at once. Each photo starts as its own item; select the photos of one item and tap Merge, and the first becomes the cover. After Add all, the new items are marked Needs details.',
+          'Import album takes up to 100 photos, and Add photos lets you pick them in several rounds, also from different albums. Each photo starts as its own item; select the photos of one item and tap Merge, and the first becomes the cover. After Add all, the new items are marked Needs details.',
           'The Needs details bar on the home page can show only the unfinished items. Open one and select Fill in details to complete it.',
           'Open a collection card to view it, then use Edit Item to make changes or delete it.',
         ],
@@ -77,7 +77,7 @@ const content = {
         title: 'Wishlist',
         items: [
           'Open the Wishlist tab to track merchandise you want. A photo, a name, or a link is enough to save an entry; fill in the rest later.',
-          'Import album lets you choose up to 30 photos or screenshots at once and merge the ones of the same item into one entry; fill in the details later.',
+          'Import album takes up to 100 photos or screenshots, picked in one or more rounds, and merges the ones of the same item into one entry; fill in the details later.',
           'Record shop links, prices, order deadlines, release times, and priorities. Deadlines within 7 days are highlighted, and the reminder stops once the status is Ordered.',
           'When an item arrives, open it and select Move to collection. Take or choose new photos (or skip to keep the wishlist photos), fill in the details, and save; the entry moves to your collection.',
           'The wishlist is stored apart from your collection, and JSON backups include both.',

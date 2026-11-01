@@ -8,10 +8,10 @@ for published releases.
 
 ### Added
 
-- Import album, in both the collection and the wishlist: choose up to 30 photos at once.
-  Each photo starts as its own item; select the photos of one item and tap Merge (the
-  first becomes the cover), split a merged item again, or leave photos out, then add them
-  all in one step.
+- Import album, in both the collection and the wishlist: choose up to 100 photos, in one
+  or more rounds (for example one album at a time). Each photo starts as its own item;
+  select the photos of one item and tap Merge (the first becomes the cover), split a
+  merged item again, or leave photos out, then add them all in one step.
 - Items and wishlist entries hold up to 10 photos. The first is the cover and can be
   changed; item and entry pages show the photos with thumbnails, and cards show how many
   there are.
