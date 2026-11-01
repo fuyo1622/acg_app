@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
@@ -401,6 +401,30 @@ describe('Home smoke flows', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
     expect(itemLinks()).toHaveLength(2);
+  });
+
+  it('opens an item with the order of the list as filtered, for moving between items', () => {
+    const unfinished = id => ({ ...collectionItem(id, 0), series: [], character: [], merchandise_type: '' });
+    vi.mocked(useLiveQuery).mockReturnValue([collectionItem(1, 0), unfinished(2), unfinished(3)]);
+    function ItemPage() {
+      const location = useLocation();
+      return <p>Order: {location.state?.order.join(', ')}</p>;
+    }
+    render(
+      <LanguageProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/item/:id" element={<ItemPage />} />
+          </Routes>
+        </MemoryRouter>
+      </LanguageProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show only these' }));
+    fireEvent.click(screen.getAllByRole('link').find(link => link.getAttribute('href') === '/item/3'));
+
+    expect(screen.getByText('Order: 2, 3')).toBeInTheDocument();
   });
 
   it('says how many items an album import added', () => {

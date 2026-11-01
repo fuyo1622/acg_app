@@ -64,6 +64,8 @@ export default function Wishlist() {
     }),
     [entries, searchTerm, filterStatus, filterPriority, sortOrder, getTypeLabel],
   );
+  // The whole filtered and sorted list, so swiping on an entry page follows it.
+  const entryOrder = useMemo(() => filteredEntries.map(entry => entry.id), [filteredEntries]);
   const pageCount = Math.max(1, Math.ceil(filteredEntries.length / COLLECTION_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, pageCount);
   const pageStart = (safeCurrentPage - 1) * COLLECTION_PAGE_SIZE;
@@ -167,7 +169,7 @@ export default function Wishlist() {
               <p>{t(isEmpty ? 'wishlistEmptyHint' : 'tryAdjustingWishlist')}</p>
             </div>
           ) : (
-            visibleEntries.map(entry => <WishlistCard key={entry.id} entry={entry} />)
+            visibleEntries.map(entry => <WishlistCard key={entry.id} entry={entry} order={entryOrder} />)
           )}
         </div>
 

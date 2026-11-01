@@ -4,7 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Edit2, ExternalLink, MessageSquare, PackageCheck } from 'lucide-react';
 import { db } from '../services/db';
 import PhotoGallery from '../components/PhotoGallery';
+import SiblingNav from '../components/SiblingNav';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useSiblingNavigation } from '../hooks/useSiblingNavigation';
+import { useSwipe } from '../hooks/useSwipe';
 import { getPhotos } from '../utils/photoUtils';
 import {
   DEFAULT_TYPES,
@@ -37,6 +40,8 @@ export default function WishlistDetail() {
   );
 
   const photos = useMemo(() => getPhotos(entry), [entry]);
+  const navigation = useSiblingNavigation({ table: db.wishlist, id: entryId, path: '/wishlist/item' });
+  const swipe = useSwipe({ onSwipeLeft: navigation.goNext, onSwipeRight: navigation.goPrevious });
 
   if (entry === undefined) return <div className="loading">{t('loading')}</div>;
   if (entry === null) {
@@ -75,84 +80,92 @@ export default function WishlistDetail() {
   // Stored links were validated on save and on import; checking again here keeps a
   // record edited outside the app from ever rendering a script URL.
   const links = (entry.links ?? []).filter(link => isWebUrl(link.url));
+  const openEditor = () => {
+    if (navigation.linkState) navigate(`/wishlist/edit/${entry.id}`, { state: navigation.linkState });
+    else navigate(`/wishlist/edit/${entry.id}`);
+  };
 
   return (
-    <div className="item-detail-page wishlist-detail">
+    <div className="item-detail-page wishlist-detail" {...swipe}>
       <header className="page-header">
         <button className="back-btn" onClick={() => navigate('/wishlist')} aria-label={t('backWishlist')}>
           <ArrowLeft size={24} />
         </button>
+        <SiblingNav navigation={navigation} />
         <button
           className="edit-btn"
-          onClick={() => navigate(`/wishlist/edit/${entry.id}`)}
+          onClick={openEditor}
           aria-label={t('editWishlistEntry')}
         >
           <Edit2 size={24} />
         </button>
       </header>
 
-      {/* Screenshots are often tall, and their text is unreadable at the default height. */}
-      <PhotoGallery photos={photos} alt={title} expandable />
+      {/* Keyed by entry, so a photo chosen on one entry does not carry over to the next. */}
+      <div key={entry.id} className={navigation.slideFrom ? `detail-slide-from-${navigation.slideFrom}` : undefined}>
+        {/* Screenshots are often tall, and their text is unreadable at the default height. */}
+        <PhotoGallery photos={photos} alt={title} expandable />
 
-      <div className="detail-info glass-panel">
-        <div className="detail-header">
-          <h1>{title}</h1>
-          <span className="detail-badge">{t(WISHLIST_STATUS_LABELS[entry.status] ?? 'statusWant')}</span>
-        </div>
-
-        {facts.length > 0 && (
-          <dl className="wishlist-facts">
-            {facts.map(fact => (
-              <div key={fact.key}>
-                <dt>{t(fact.key)}</dt>
-                <dd className={fact.className}>{fact.value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-
-        {links.length > 0 && (
-          <section className="wishlist-links-section">
-            <h3>{t('links')}</h3>
-            <ul className="wishlist-links">
-              {links.map(link => (
-                <li key={link.url}>
-                  <a href={link.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink size={18} aria-hidden="true" />
-                    <span className="wishlist-link-label">{getLinkLabel(link)}</span>
-                    {link.label && <span className="wishlist-link-host">{getLinkHost(link.url)}</span>}
-                    <span className="sr-only">{t('opensInNewTab')}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {entry.notes && (
-          <div className="detail-notes form-group">
-            <h3 className="wishlist-section-title">
-              <MessageSquare size={18} color="var(--accent-primary)" />
-              {t('notes')}
-            </h3>
-            <p className="wishlist-notes">{entry.notes}</p>
+        <div className="detail-info glass-panel">
+          <div className="detail-header">
+            <h1>{title}</h1>
+            <span className="detail-badge">{t(WISHLIST_STATUS_LABELS[entry.status] ?? 'statusWant')}</span>
           </div>
-        )}
 
-        <div className="wishlist-move">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => navigate(`/wishlist/move/${entry.id}`)}
-          >
-            <PackageCheck size={20} aria-hidden="true" />
-            {t('moveToCollection')}
-          </button>
-          <p>{t('moveToCollectionHint')}</p>
-        </div>
+          {facts.length > 0 && (
+            <dl className="wishlist-facts">
+              {facts.map(fact => (
+                <div key={fact.key}>
+                  <dt>{t(fact.key)}</dt>
+                  <dd className={fact.className}>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
-        <div className="wishlist-added-on">
-          {t('addedOn')} {new Date(entry.created_at).toLocaleDateString()}
+          {links.length > 0 && (
+            <section className="wishlist-links-section">
+              <h3>{t('links')}</h3>
+              <ul className="wishlist-links">
+                {links.map(link => (
+                  <li key={link.url}>
+                    <a href={link.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={18} aria-hidden="true" />
+                      <span className="wishlist-link-label">{getLinkLabel(link)}</span>
+                      {link.label && <span className="wishlist-link-host">{getLinkHost(link.url)}</span>}
+                      <span className="sr-only">{t('opensInNewTab')}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {entry.notes && (
+            <div className="detail-notes form-group">
+              <h3 className="wishlist-section-title">
+                <MessageSquare size={18} color="var(--accent-primary)" />
+                {t('notes')}
+              </h3>
+              <p className="wishlist-notes">{entry.notes}</p>
+            </div>
+          )}
+
+          <div className="wishlist-move">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate(`/wishlist/move/${entry.id}`)}
+            >
+              <PackageCheck size={20} aria-hidden="true" />
+              {t('moveToCollection')}
+            </button>
+            <p>{t('moveToCollectionHint')}</p>
+          </div>
+
+          <div className="wishlist-added-on">
+            {t('addedOn')} {new Date(entry.created_at).toLocaleDateString()}
+          </div>
         </div>
       </div>
     </div>

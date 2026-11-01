@@ -13,6 +13,7 @@ const routerMocks = vi.hoisted(() => ({
 vi.mock('react-router-dom', () => ({
   useNavigate: () => routerMocks.navigate,
   useParams: () => routerMocks.params,
+  useLocation: () => routerMocks.location ?? { state: null },
 }));
 
 vi.mock('dexie-react-hooks', () => ({
@@ -60,6 +61,7 @@ describe('WishlistDetail', () => {
   beforeEach(() => {
     localStorage.setItem('appLang', 'en');
     routerMocks.params = { id: '7' };
+    routerMocks.location = { state: null };
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 1, 12));
   });
@@ -150,5 +152,21 @@ describe('WishlistDetail', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('moves between the entries of the list it was opened from', () => {
+    routerMocks.location = { state: { order: [4, 7, 9] } };
+    vi.mocked(useLiveQuery).mockReturnValue(entry());
+    renderDetail();
+
+    expect(screen.getByRole('group', { name: 'Browse items' })).toHaveTextContent('2 of 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Next item' }));
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith('/wishlist/item/9', {
+      replace: true,
+      state: { order: [4, 7, 9], from: 'right' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Wishlist Entry' }));
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith('/wishlist/edit/7', { state: { order: [4, 7, 9] } });
   });
 });

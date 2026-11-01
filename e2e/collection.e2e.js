@@ -246,6 +246,51 @@ photoTest('imports album photos as unfinished items and fills one in later', asy
   await expect.poll(() => shelfPhoto.evaluate(image => image.naturalWidth)).toBe(640);
 });
 
+photoTest('moves between items with the arrows, the keyboard and a swipe', async ({ page, browserName }) => {
+  await useEnglish(page);
+  await page.getByLabel('Album photos').setInputFiles([png('a.png'), png('b.png'), png('c.png')]);
+  await page.getByRole('button', { name: 'Add all (3)' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  const cards = page.getByRole('link', { name: /Unknown Character/ });
+  await expect(cards).toHaveCount(3);
+  const paths = await cards.evaluateAll(links => links.map(link => link.getAttribute('href')));
+  const atItem = index => expect(page).toHaveURL(new RegExp(`${paths[index]}$`));
+  await cards.nth(1).click();
+  const position = page.getByRole('group', { name: 'Browse items' });
+  await expect(position).toContainText('2 of 3');
+  await atItem(1);
+
+  await page.getByRole('button', { name: 'Next item' }).click();
+  await atItem(2);
+  await expect(position).toContainText('3 of 3');
+  await expect(page.getByRole('button', { name: 'Next item' })).toBeDisabled();
+
+  await page.keyboard.press('ArrowLeft');
+  await atItem(1);
+
+  // Desktop WebKit has no touch input; in Chromium, a real swipe goes through the browser.
+  if (browserName === 'chromium') {
+    const panel = await page.locator('.detail-info').boundingBox();
+    const y = panel.y + 40;
+    const client = await page.context().newCDPSession(page);
+    await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: panel.x + panel.width - 60, y }] });
+    for (const step of [1, 2, 3]) {
+      await client.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: panel.x + panel.width - 60 - step * 70, y }],
+      });
+    }
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await atItem(2);
+  }
+
+  // Moving replaces the history entry, so Back returns to the list.
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
+});
+
 // Stored photos larger than any album import makes, so six of them pass the 50 MB that
 // backups were once limited to.
 async function seedLargePhotos(page, { count, bytes }) {

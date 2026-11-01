@@ -6,7 +6,8 @@ import { getCoverPhoto, getPhotos } from '../utils/photoUtils';
 import { needsDetails } from '../utils/validationUtils';
 import { formatValues } from '../utils/valueUtils';
 
-export default function ItemCard({ item }) {
+// `order` is the list's order of item ids, which the item page uses to move between them.
+export default function ItemCard({ item, order }) {
   const { t, lang } = useLanguage();
   const cover = getCoverPhoto(item);
   const imageUrl = useObjectUrl(cover);
@@ -18,6 +19,7 @@ export default function ItemCard({ item }) {
   return (
     <Link
       to={`/item/${item.id}`}
+      state={order ? { order } : undefined}
       className="item-card glass-panel"
     >
       <div className="image-container">

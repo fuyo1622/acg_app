@@ -34,6 +34,7 @@ const imageMocks = vi.hoisted(() => ({
 vi.mock('react-router-dom', () => ({
   useNavigate: () => routerMocks.navigate,
   useParams: () => routerMocks.params,
+  useLocation: () => routerMocks.location ?? { state: null },
 }));
 
 vi.mock('dexie-react-hooks', () => ({
@@ -446,5 +447,25 @@ describe('AddEditItem smoke flows', () => {
 
     await expect(itemQuery()).resolves.toEqual({ item: null });
     expect(dbMocks.items.get).not.toHaveBeenCalled();
+  });
+
+  it('hands the item page its list order back after an edit or a cancel', async () => {
+    const item = { id: 7, series: ['Evangelion'], character: ['Asuka'], merchandise_type: 'figure', notes: '', photos: [] };
+    routerMocks.params = { id: '7' };
+    routerMocks.location = { state: { order: [5, 7, 9] } };
+    dbMocks.items.get.mockResolvedValue(item);
+    mockLiveQueries({ allItems: [item], editItem: item });
+    const { container } = renderForm();
+    await screen.findByText('Evangelion');
+
+    // The back arrow and the button under the form both cancel.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' }).at(-1));
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/7', { state: { order: [5, 7, 9] } });
+
+    fireEvent.submit(container.querySelector('form'));
+    await waitFor(() => {
+      expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/7', { replace: true, state: { order: [5, 7, 9] } });
+    });
+    routerMocks.location = undefined;
   });
 });
