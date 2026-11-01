@@ -12,16 +12,14 @@ import WishlistCard from '../components/WishlistCard';
 import {
   COLLECTION_PAGE_SIZE,
   DEFAULT_TYPES,
-  QUICK_ADD_CONCURRENCY,
-  QUICK_ADD_LIMIT,
   WISHLIST_PRIORITIES,
   WISHLIST_PRIORITY_LABELS,
   WISHLIST_STATUSES,
   WISHLIST_STATUS_LABELS,
 } from '../utils/constants';
-import { mapWithConcurrency } from '../utils/backupUtils';
-import { compressImage } from '../utils/imageUtils';
-import { createWishlistEntry, filterWishlist, readPreferredCurrency } from '../utils/wishlistUtils';
+import { useImportedNotice } from '../hooks/useImportedNotice';
+import { handOffAlbumFiles } from '../utils/albumHandoff';
+import { filterWishlist } from '../utils/wishlistUtils';
 import './Home.css';
 import './Wishlist.css';
 
@@ -39,9 +37,8 @@ export default function Wishlist() {
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
-  const [isAdding, setIsAdding] = useState(false);
-  const [notice, setNotice] = useState(null);
-  const quickAddInputRef = useRef(null);
+  const [importedCount, closeImportedNotice] = useImportedNotice();
+  const albumInputRef = useRef(null);
 
   const entries = useLiveQuery(
     () => db.wishlist.orderBy('created_at').reverse().toArray(),
@@ -72,47 +69,13 @@ export default function Wishlist() {
   const pageStart = (safeCurrentPage - 1) * COLLECTION_PAGE_SIZE;
   const visibleEntries = filteredEntries.slice(pageStart, pageStart + COLLECTION_PAGE_SIZE);
 
-  // Each screenshot becomes its own entry with nothing else filled in, so a batch can be
-  // captured quickly in a shop or online and completed later.
-  const handleQuickAdd = async (event) => {
-    const chosenFiles = Array.from(event.target.files ?? []);
+  // The picker opens here, on the tap; the import page receives the chosen files.
+  const handleAlbumPick = (event) => {
+    const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (chosenFiles.length === 0) return;
-
-    const images = chosenFiles.filter(file => file.type.startsWith('image/'));
-    if (images.length === 0) {
-      setNotice({ title: t('errorTitle'), message: t('quickAddNoImages') });
-      return;
-    }
-    if (images.length > QUICK_ADD_LIMIT) {
-      setNotice({ title: t('errorTitle'), message: t('quickAddTooMany', { max: QUICK_ADD_LIMIT }) });
-      return;
-    }
-
-    setIsAdding(true);
-    try {
-      const photos = await mapWithConcurrency(images, QUICK_ADD_CONCURRENCY, compressImage);
-      const now = Date.now();
-      const currency = readPreferredCurrency();
-
-      // Earlier picks get later timestamps, so the batch reads in picking order under
-      // "newest first".
-      const newEntries = photos.map((photo, index) => {
-        const createdAt = new Date(now - index);
-        return createWishlistEntry({ photo, currency, created_at: createdAt, updated_at: createdAt });
-      });
-
-      // An explicit transaction saves the whole batch or none of it. It also avoids a
-      // Dexie 4.4 live-query cache bug: when an auto-keyed add fails outside one, the next
-      // wishlist query throws during render and the page falls into the error boundary.
-      await db.transaction('rw', db.wishlist, () => db.wishlist.bulkAdd(newEntries));
-      setNotice({ title: t('successTitle'), message: t('quickAddDone', { count: photos.length }) });
-    } catch (error) {
-      console.error(error);
-      setNotice({ title: t('errorTitle'), message: t('saveError') });
-    } finally {
-      setIsAdding(false);
-    }
+    if (files.length === 0) return;
+    handOffAlbumFiles(files);
+    navigate('/wishlist/import');
   };
 
   const isEmpty = entries !== undefined && entries.length === 0;
@@ -173,25 +136,20 @@ export default function Wishlist() {
       </AppHeader>
 
       <main>
-        <div className="wishlist-toolbar">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => quickAddInputRef.current?.click()}
-            disabled={isAdding}
-          >
+        <div className="list-toolbar">
+          <button type="button" className="btn btn-secondary" onClick={() => albumInputRef.current?.click()}>
             <Images size={18} aria-hidden="true" />
-            {isAdding ? t('quickAddProgress') : t('quickAdd')}
+            {t('importAlbum')}
           </button>
-          <p>{t('quickAddHint')}</p>
+          <p>{t('importAlbumHintWishlist')}</p>
           <input
             type="file"
             accept="image/*"
             multiple
-            aria-label={t('quickAddFiles')}
+            aria-label={t('albumPhotos')}
             className="sr-only"
-            ref={quickAddInputRef}
-            onChange={handleQuickAdd}
+            ref={albumInputRef}
+            onChange={handleAlbumPick}
           />
         </div>
 
@@ -237,11 +195,11 @@ export default function Wishlist() {
       </button>
 
       <AppDialog
-        open={Boolean(notice)}
-        title={notice?.title}
-        message={notice?.message}
+        open={importedCount !== null}
+        title={t('successTitle')}
+        message={t('albumImportDone', { count: importedCount ?? 0 })}
         confirmLabel={t('close')}
-        onConfirm={() => setNotice(null)}
+        onConfirm={closeImportedNotice}
       />
     </div>
   );

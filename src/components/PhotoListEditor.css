@@ -1,0 +1,138 @@
+.photo-list-editor {
+  margin-bottom: 2rem;
+}
+
+.photo-list-empty {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  border: 2px dashed var(--border-color);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.photo-list-empty:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-card-hover);
+}
+
+.photo-list-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 0.5rem;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.photo-list-empty strong {
+  font-size: 1.25rem;
+}
+
+.photo-list-empty span:last-child {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.photo-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(30%, 9rem), 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.photo-list-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  padding: 0;
+}
+
+.photo-list-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-cover-label {
+  position: absolute;
+  left: 0.4rem;
+  bottom: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-gradient);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.photo-action {
+  position: absolute;
+  top: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.photo-remove {
+  right: 0.35rem;
+}
+
+.photo-remove:hover {
+  background: var(--danger);
+}
+
+.photo-make-cover {
+  left: 0.35rem;
+}
+
+.photo-make-cover:hover {
+  background: var(--accent-primary);
+}
+
+.photo-list-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 2px dashed var(--border-color);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.photo-list-add:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-main);
+}
+
+.photo-list-limit {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #fbbf24;
+}

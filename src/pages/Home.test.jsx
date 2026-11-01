@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
+import { takeAlbumFiles } from '../utils/albumHandoff';
 import { replaceBackupInDb } from '../utils/backupUtils';
 import { APP_RELEASE_URL, APP_VERSION } from '../utils/version';
 import Home from './Home';
@@ -71,7 +72,7 @@ function collectionItem(id, photoBytes) {
     character: ['Current Character'],
     merchandise_type: 'figure',
     notes: '',
-    photo,
+    photos: photo ? [photo] : [],
     created_at: new Date('2026-01-01T00:00:00.000Z'),
     updated_at: new Date('2026-01-01T00:00:00.000Z'),
   };
@@ -102,7 +103,7 @@ function wishlistEntry(id, name) {
     priority: 'medium',
     status: 'want',
     notes: '',
-    photo: null,
+    photos: [],
     created_at: new Date('2026-01-01T00:00:00.000Z'),
     updated_at: new Date('2026-01-01T00:00:00.000Z'),
   };
@@ -373,9 +374,59 @@ describe('Home smoke flows', () => {
       .map(([blob]) => blob)
       .filter(blob => blob.type === 'application/json');
     const exported = JSON.parse(await readBlobText(backupBlob));
-    expect(exported.version).toBe(3);
-    expect(exported.items).toHaveLength(1);
-    expect(exported.wishlist).toEqual([expect.objectContaining({ id: 5, name: 'Rei plush' })]);
+    expect(exported.version).toBe(4);
+    expect(exported.items).toEqual([expect.objectContaining({ id: 1, photos: [] })]);
+    expect(exported.items[0]).not.toHaveProperty('photo');
+    expect(exported.wishlist).toEqual([expect.objectContaining({ id: 5, name: 'Rei plush', photos: [] })]);
+  });
+
+  it('opens the album import with the photos chosen here', () => {
+    render(
+      <LanguageProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/import" element={<p>Album import page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </LanguageProvider>,
+    );
+    const files = [new File(['photo'], 'figure.png', { type: 'image/png' })];
+
+    fireEvent.change(screen.getByLabelText('Album photos'), { target: { files } });
+
+    expect(screen.getByText('Album import page')).toBeInTheDocument();
+    expect(takeAlbumFiles()).toEqual(files);
+  });
+
+  it('counts the items that need details and can show only those', () => {
+    const unfinished = { ...collectionItem(2, 0), series: [], character: [], merchandise_type: '' };
+    vi.mocked(useLiveQuery).mockReturnValue([collectionItem(1, 0), unfinished]);
+    renderHome();
+    const itemLinks = () => screen.getAllByRole('link').filter(link => link.getAttribute('href')?.startsWith('/item/'));
+
+    expect(screen.getByText('Needs details: 1')).toBeInTheDocument();
+    expect(itemLinks()).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show only these' }));
+    expect(itemLinks().map(link => link.getAttribute('href'))).toEqual(['/item/2']);
+    expect(within(itemLinks()[0]).getByText('Needs details')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(itemLinks()).toHaveLength(2);
+  });
+
+  it('says how many items an album import added', () => {
+    render(
+      <LanguageProvider>
+        <MemoryRouter initialEntries={[{ pathname: '/', state: { importedCount: 2 } }]}>
+          <Home />
+        </MemoryRouter>
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Completed' }))
+      .toHaveTextContent('Added 2 item(s). Open each one to fill in the details.');
   });
 
   it('links the collection and wishlist tabs', () => {

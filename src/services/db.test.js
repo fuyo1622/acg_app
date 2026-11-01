@@ -1,11 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { db, DB_NAME, DB_SCHEMA_VERSION, migrateItemToV2 } from './db';
+import { db, DB_NAME, DB_SCHEMA_VERSION, migrateItemToV2, migrateRecordToV4 } from './db';
 
 describe('database schema', () => {
   it('publishes one canonical schema version and database name', () => {
     expect(DB_NAME).toBe('acg-merch-db');
-    expect(DB_SCHEMA_VERSION).toBe(3);
+    expect(DB_SCHEMA_VERSION).toBe(4);
     expect(db.verno).toBe(DB_SCHEMA_VERSION);
+  });
+
+  it('turns the single photo of an older record into the first of its photos', () => {
+    const photo = new Blob(['photo'], { type: 'image/png' });
+
+    expect(migrateRecordToV4({ series: ['Evangelion'], photo })).toEqual({ series: ['Evangelion'], photos: [photo] });
+    expect(migrateRecordToV4({ series: ['Evangelion'], photo: null })).toEqual({ series: ['Evangelion'], photos: [] });
+    expect(migrateRecordToV4({ name: 'Asuka figure' })).toEqual({ name: 'Asuka figure', photos: [] });
+  });
+
+  it('leaves records that already hold a photo list unchanged', () => {
+    const photos = [new Blob(['a'], { type: 'image/png' }), new Blob(['b'], { type: 'image/png' })];
+    expect(migrateRecordToV4({ photos })).toEqual({ photos });
   });
 
   it('keeps the collection and the wishlist in separate tables', () => {

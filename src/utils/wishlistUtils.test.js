@@ -21,7 +21,7 @@ const photo = new Blob(['screenshot'], { type: 'image/png' });
 
 function form(fields = {}) {
   return {
-    photo: null,
+    photos: [],
     name: '',
     series: [],
     character: [],
@@ -41,10 +41,10 @@ function form(fields = {}) {
 
 describe('createWishlistEntry', () => {
   it('fills every field with an empty default and keeps overrides', () => {
-    const entry = createWishlistEntry({ photo, currency: 'JPY' });
+    const entry = createWishlistEntry({ photos: [photo], currency: 'JPY' });
 
     expect(entry).toEqual(expect.objectContaining({
-      photo,
+      photos: [photo],
       name: '',
       links: [],
       price: null,
@@ -102,19 +102,20 @@ describe('parsePrice', () => {
 describe('prepareWishlistEntry', () => {
   it('requires a photo, a name, or a link', () => {
     expect(prepareWishlistEntry(form())).toEqual({ errorKey: 'wishlistRequireOne' });
-    expect(prepareWishlistEntry(form({ photo })).entry).toBeDefined();
+    expect(prepareWishlistEntry(form({ photos: [] }))).toEqual({ errorKey: 'wishlistRequireOne' });
+    expect(prepareWishlistEntry(form({ photos: [photo] })).entry).toBeDefined();
     expect(prepareWishlistEntry(form({ name: 'Asuka figure' })).entry).toBeDefined();
     expect(prepareWishlistEntry(form({ links: [{ url: 'x.com/post/1', label: '' }] })).entry)
       .toBeDefined();
   });
 
   it('names the link that is not a web address', () => {
-    expect(prepareWishlistEntry(form({ photo, links: [{ url: 'not a link', label: '' }] })))
+    expect(prepareWishlistEntry(form({ photos: [photo], links: [{ url: 'not a link', label: '' }] })))
       .toEqual({ errorKey: 'wishlistInvalidLink', errorValues: { value: 'not a link' } });
   });
 
   it('rejects a price that cannot be stored', () => {
-    expect(prepareWishlistEntry(form({ photo, price: '-5' })))
+    expect(prepareWishlistEntry(form({ photos: [photo], price: '-5' })))
       .toEqual({ errorKey: 'wishlistInvalidPrice' });
   });
 
@@ -140,6 +141,7 @@ describe('prepareWishlistEntry', () => {
       status: 'want',
     }));
     expect(entry).not.toHaveProperty('photo');
+    expect(entry).not.toHaveProperty('photos');
   });
 });
 

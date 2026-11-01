@@ -95,7 +95,7 @@ function wishlistEntry(fields = {}) {
     priority: 'high',
     status: 'ordered',
     notes: 'Bonus postcard',
-    photo: new Blob(['wishlist photo'], { type: 'image/png' }),
+    photos: [new Blob(['wishlist photo'], { type: 'image/png' })],
     created_at: new Date('2026-09-01T00:00:00.000Z'),
     updated_at: new Date('2026-09-01T00:00:00.000Z'),
     ...fields,
@@ -134,7 +134,7 @@ describe('AddEditItem smoke flows', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the add form, blocks invalid submit, and invokes a valid DB add', async () => {
+  it('renders the add form, asks before saving without details, and invokes a valid DB add', async () => {
     const { container } = renderForm();
 
     expect(screen.getByRole('heading', { name: 'New Item' })).toBeInTheDocument();
@@ -145,10 +145,11 @@ describe('AddEditItem smoke flows', () => {
     const form = container.querySelector('form');
     fireEvent.submit(form);
 
-    expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
-      .toHaveTextContent('Please enter at least a series or character.');
+    expect(screen.getByRole('dialog', { name: 'Save without all details?' }))
+      .toHaveTextContent('Still missing: a series or character and a type.');
     expect(dbMocks.items.add).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.queryByRole('dialog', { name: 'Save without all details?' })).not.toBeInTheDocument();
 
     addNewMultiValue('Series / Franchise', 'Neon Genesis Evangelion');
     fireEvent.change(screen.getByLabelText('Merchandise Type'), {
@@ -162,10 +163,61 @@ describe('AddEditItem smoke flows', () => {
         character: [],
         merchandise_type: 'figure',
         notes: '',
-        photo: null,
+        photos: [],
       }));
     });
     expect(routerMocks.navigate).toHaveBeenCalledWith('/', { replace: true });
+  });
+
+  it('saves an item without details once the user confirms', async () => {
+    const { container } = renderForm();
+
+    fireEvent.submit(container.querySelector('form'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save for now' }));
+
+    await waitFor(() => {
+      expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({
+        series: [],
+        character: [],
+        merchandise_type: '',
+        photos: [],
+      }));
+    });
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/', { replace: true });
+  });
+
+  it('shows what an unfinished item still lacks while it is edited', async () => {
+    const unfinished = { id: 7, series: [], character: [], merchandise_type: '', notes: '', photos: [] };
+    routerMocks.params = { id: '7' };
+    mockLiveQueries({ allItems: [unfinished], editItem: unfinished });
+
+    renderForm();
+    expect(await screen.findByText('Still missing: a series or character and a type.')).toBeInTheDocument();
+
+    addNewMultiValue('Character', 'Asuka');
+    expect(screen.getByText('Still missing: a type.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Merchandise Type'), { target: { value: 'figure' } });
+    expect(screen.queryByText(/Still missing/)).not.toBeInTheDocument();
+  });
+
+  it('compresses newly added photos and keeps the stored ones as they are', async () => {
+    const stored = new Blob(['stored'], { type: 'image/webp' });
+    const item = { id: 7, series: ['Evangelion'], character: [], merchandise_type: 'figure', notes: '', photos: [stored] };
+    routerMocks.params = { id: '7' };
+    mockLiveQueries({ allItems: [item], editItem: item });
+    const added = new File(['added'], 'added.jpg', { type: 'image/jpeg' });
+
+    const { container } = renderForm();
+    await screen.findByText('Evangelion');
+    fireEvent.change(screen.getByLabelText('Add Photo'), { target: { files: [added] } });
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => {
+      expect(dbMocks.items.update).toHaveBeenCalledWith(7, expect.objectContaining({ photos: [stored, added] }));
+    });
+    expect(compressImage).toHaveBeenCalledTimes(1);
+    expect(compressImage).toHaveBeenCalledWith(added);
   });
 
   it('edits a restored Blob-backed item without recompressing the existing image', async () => {
@@ -176,7 +228,7 @@ describe('AddEditItem smoke flows', () => {
       character: 'Imported Character',
       merchandise_type: 'figure',
       notes: 'Restored from backup',
-      photo: restoredPhoto,
+      photos: [restoredPhoto],
     };
 
     routerMocks.params = { id: '7' };
@@ -196,7 +248,7 @@ describe('AddEditItem smoke flows', () => {
         character: ['Imported Character'],
         merchandise_type: 'figure',
         notes: 'Restored from backup',
-        photo: restoredPhoto,
+        photos: [restoredPhoto],
       }));
     });
     expect(compressImage).not.toHaveBeenCalled();
@@ -244,7 +296,7 @@ describe('AddEditItem smoke flows', () => {
       series: ['Imported Series'],
       character: ['Imported Character'],
       merchandise_type: 'figure',
-      photo: null,
+      photos: [],
     };
     routerMocks.params = { id: '7' };
     dbMocks.items.get.mockResolvedValue(restoredItem);
@@ -270,7 +322,7 @@ describe('AddEditItem smoke flows', () => {
       series: ['Imported Series'],
       character: ['Imported Character'],
       merchandise_type: 'Nendoroid',
-      photo: null,
+      photos: [],
     };
     routerMocks.params = { id: '7' };
     dbMocks.items.get.mockResolvedValue(customItem);
@@ -324,7 +376,7 @@ describe('AddEditItem smoke flows', () => {
       series: ['Evangelion'],
       character: ['Asuka'],
       merchandise_type: 'figure',
-      photo: entry.photo,
+      photos: entry.photos,
     }));
     expect(dbMocks.wishlist.delete).toHaveBeenCalledWith(7);
     expect(compressImage).not.toHaveBeenCalled();
@@ -341,25 +393,31 @@ describe('AddEditItem smoke flows', () => {
     fireEvent.submit(container.querySelector('form'));
 
     await waitFor(() => {
-      expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({ photo: arrivedPhoto }));
+      expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({ photos: [arrivedPhoto] }));
     });
     expect(compressImage).toHaveBeenCalledWith(arrivedPhoto);
   });
 
-  it('asks for the fields the collection requires before moving an entry', () => {
+  it('asks before moving an entry without details, and can move it unfinished', async () => {
     routerMocks.params = { id: '7' };
+    dbMocks.items.add.mockResolvedValue(42);
     mockLiveQueries({
-      moveEntry: wishlistEntry({ series: [], character: [], merchandise_type: '', photo: null }),
+      moveEntry: wishlistEntry({ series: [], character: [], merchandise_type: '', photos: [] }),
     });
 
     const { container } = renderForm({ mode: 'move' });
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     fireEvent.submit(container.querySelector('form'));
 
-    expect(screen.getByRole('dialog', { name: 'Something went wrong' }))
-      .toHaveTextContent('Please enter at least a series or character.');
+    expect(screen.getByRole('dialog', { name: 'Save without all details?' })).toBeInTheDocument();
     expect(dbMocks.transaction).not.toHaveBeenCalled();
     expect(dbMocks.wishlist.delete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save for now' }));
+    await waitFor(() => {
+      expect(dbMocks.wishlist.delete).toHaveBeenCalledWith(7);
+    });
+    expect(dbMocks.items.add).toHaveBeenCalledWith(expect.objectContaining({ merchandise_type: '', photos: [] }));
   });
 
   it('returns to the wishlist when the entry to move does not exist', async () => {

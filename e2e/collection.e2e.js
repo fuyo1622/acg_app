@@ -1,10 +1,16 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { photoTest, png } from './fixtures';
 
 async function useEnglish(page) {
   await page.goto('/');
   await page.getByLabel('語言').selectOption('en');
   await expect(page.getByRole('heading', { name: 'My Collection' })).toBeVisible();
+}
+
+function seriousViolations(results) {
+  return results.violations.filter(violation => ['serious', 'critical'].includes(violation.impact));
 }
 
 // The combobox offers an existing value instead of an "add" entry once one is stored.
@@ -187,6 +193,88 @@ test('exports, imports and creates a pre-replacement safety backup', async ({ pa
   await expect(page.getByRole('heading', { name: 'Asuka Langley' })).toBeVisible();
 });
 
+photoTest('imports album photos as unfinished items and fills one in later', async ({ page }) => {
+  await useEnglish(page);
+
+  await page.getByLabel('Album photos').setInputFiles([png('front.png'), png('back.png'), png('other.png')]);
+  await expect(page.getByRole('heading', { name: 'Import album' })).toBeVisible();
+  await page.getByRole('button', { name: 'Item 1: 1 photo(s)' }).click();
+  await page.getByRole('button', { name: 'Item 2: 1 photo(s)' }).click();
+  await page.getByRole('button', { name: 'Merge' }).click();
+  await expect(page.getByRole('button', { name: 'Item 1: 2 photo(s)' })).toBeVisible();
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
+  await page.getByRole('button', { name: 'Add all (2)' }).click();
+
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('Added 2 item(s)');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByText('Needs details: 2')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Unknown Character/ })).toHaveCount(2);
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
+
+  // The merged item is the first tile, so it is the newest card.
+  await page.getByRole('link', { name: /Unknown Character/ }).first().click();
+  await expect(page.getByRole('button', { name: 'Show photo 2' })).toBeVisible();
+  await expect(page.getByText('Still missing: a series or character and a type.')).toBeVisible();
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
+  await page.getByRole('button', { name: 'Fill in details' }).click();
+
+  await chooseValue(page, 'Series / Franchise', 'Evangelion');
+  await page.getByLabel('Merchandise Type').selectOption('figure');
+  await page.getByRole('button', { name: 'Save Changes' }).click();
+  await expect(page.getByRole('img', { name: 'Evangelion' })).toBeVisible();
+  await expect(page.getByText('Fill in details')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show photo 2' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Back to collection' }).click();
+  await expect(page.getByText('Needs details: 1')).toBeVisible();
+  await page.getByRole('button', { name: 'Show only these' }).click();
+  await expect(page.getByRole('link', { name: /Unknown Character/ })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: /Evangelion/ })).toHaveCount(0);
+});
+
+photoTest('keeps every photo of an item through a backup and restore', async ({ page }) => {
+  await useEnglish(page);
+  await page.getByRole('button', { name: 'Add Item' }).click();
+  await page.getByLabel('Add Photo').setInputFiles([png('front.png'), png('back.png')]);
+  await expect(page.getByRole('img', { name: 'Photo 2 of 2' })).toBeVisible();
+  await chooseValue(page, 'Series / Franchise', 'Evangelion');
+  await chooseValue(page, 'Character', 'Asuka Langley');
+  await page.getByLabel('Merchandise Type').selectOption('figure');
+  await page.getByRole('button', { name: 'Add Item', exact: true }).click();
+  await expect(page.getByRole('img', { name: '2 photos' })).toBeVisible();
+
+  const exported = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export Backup' }).click(),
+  ]).then(([download]) => download);
+  const exportedPath = await exported.path();
+  const backup = JSON.parse(await readFile(exportedPath, 'utf8'));
+  expect(backup.version).toBe(4);
+  expect(backup.items).toEqual([expect.objectContaining({
+    character: ['Asuka Langley'],
+    photos: [expect.stringMatching(/^data:image\/png;base64,/), expect.stringMatching(/^data:image\/png;base64,/)],
+  })]);
+  expect(backup.items[0]).not.toHaveProperty('photo');
+
+  await page.getByRole('link', { name: /Asuka Langley/ }).click();
+  await page.getByRole('button', { name: 'Edit Item' }).click();
+  await page.getByRole('button', { name: 'Are you sure you want to delete this item?' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('No items found')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(exportedPath);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await expect(page.getByRole('img', { name: '2 photos' })).toBeVisible();
+  await page.getByRole('link', { name: /Asuka Langley/ }).click();
+  await expect(page.getByRole('img', { name: 'Asuka Langley' })).toBeVisible();
+  await page.getByRole('button', { name: 'Show photo 2' }).click();
+  await expect(page.getByRole('button', { name: 'Show photo 2' })).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {
   await useEnglish(page);
 
@@ -213,14 +301,8 @@ test('runs offline from the service worker cache and checks for an update @servi
 test('has no serious automated accessibility violations on primary screens', async ({ page }) => {
   await useEnglish(page);
 
-  const homeResults = await new AxeBuilder({ page }).analyze();
-  expect(
-    homeResults.violations.filter(violation => ['serious', 'critical'].includes(violation.impact)),
-  ).toEqual([]);
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
 
   await page.getByRole('button', { name: 'Add Item' }).click();
-  const formResults = await new AxeBuilder({ page }).analyze();
-  expect(
-    formResults.violations.filter(violation => ['serious', 'critical'].includes(violation.impact)),
-  ).toEqual([]);
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
 });

@@ -20,7 +20,7 @@ const PRIORITY_RANK = Object.fromEntries(
 export function createWishlistEntry(fields = {}) {
   const now = new Date();
   return {
-    photo: null,
+    photos: [],
     name: '',
     series: [],
     character: [],
@@ -98,7 +98,7 @@ export function prepareWishlistEntry(form) {
   if (Number.isNaN(price)) return { errorKey: 'wishlistInvalidPrice' };
 
   const name = (form.name ?? '').trim();
-  if (!form.photo && !name && links.length === 0) return { errorKey: 'wishlistRequireOne' };
+  if (!(form.photos?.length > 0) && !name && links.length === 0) return { errorKey: 'wishlistRequireOne' };
 
   return {
     entry: {

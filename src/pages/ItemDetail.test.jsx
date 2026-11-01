@@ -69,4 +69,47 @@ describe('ItemDetail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Item' }));
     expect(routerMocks.navigate).toHaveBeenCalledWith('/edit/7');
   });
+
+  it('shows what an unfinished item still lacks and opens the form to add it', () => {
+    vi.mocked(useLiveQuery).mockReturnValue({
+      id: 7,
+      series: [],
+      character: [],
+      merchandise_type: '',
+      notes: '',
+      photos: [],
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    render(
+      <LanguageProvider>
+        <ItemDetail />
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText(/Still missing: a series or character and a type\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in details' }));
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/edit/7');
+  });
+
+  it('shows every photo of the item in a gallery', () => {
+    vi.stubGlobal('URL', { ...globalThis.URL, createObjectURL: vi.fn(() => 'blob:detail'), revokeObjectURL: vi.fn() });
+    vi.mocked(useLiveQuery).mockReturnValue({
+      id: 7,
+      series: ['Evangelion'],
+      character: ['Asuka'],
+      merchandise_type: 'figure',
+      photos: [new Blob(['front'], { type: 'image/png' }), new Blob(['back'], { type: 'image/png' })],
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    render(
+      <LanguageProvider>
+        <ItemDetail />
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByRole('group', { name: '2 photos' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show photo 2' })).toBeInTheDocument();
+    expect(screen.queryByText(/Still missing/)).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
 });

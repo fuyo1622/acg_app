@@ -1,9 +1,12 @@
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
-import { ArrowLeft, Edit2, MessageSquare, ImageOff } from 'lucide-react';
+import { ArrowLeft, Edit2, MessageSquare } from 'lucide-react';
+import PhotoGallery from '../components/PhotoGallery';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useObjectUrl } from '../hooks/useObjectUrl';
+import { getPhotos } from '../utils/photoUtils';
+import { describeMissingDetails, getMissingDetails } from '../utils/validationUtils';
 import { formatValues } from '../utils/valueUtils';
 import './AddEditItem.css'; // Reusing some base styles
 
@@ -20,8 +23,8 @@ export default function ItemDetail() {
     },
     [itemId],
   );
-  
-  const url = useObjectUrl(item?.photo);
+
+  const photos = useMemo(() => getPhotos(item), [item]);
 
   if (item === undefined) return <div className="loading">{t('loading')}</div>;
   if (item === null) {
@@ -39,6 +42,7 @@ export default function ItemDetail() {
   const separator = lang === 'en' ? ', ' : '、';
   const characterText = formatValues(item.character, separator);
   const seriesText = formatValues(item.series, separator);
+  const missing = getMissingDetails(item);
 
   return (
     <div className="item-detail-page">
@@ -51,18 +55,7 @@ export default function ItemDetail() {
         </button>
       </header>
 
-      <div className="detail-image-container glass-panel">
-        {url ? (
-          <img src={url} alt={characterText || seriesText} />
-        ) : (
-          <div className="empty-state">
-            <div className="empty-icon glass-panel">
-               <ImageOff size={48} color="var(--text-muted)" />
-            </div>
-            <h2>{t('noPhoto')}</h2>
-          </div>
-        )}
-      </div>
+      <PhotoGallery photos={photos} alt={characterText || seriesText || t('untitledEntry')} />
 
       <div className="detail-info glass-panel">
         <div className="detail-header">
@@ -70,8 +63,21 @@ export default function ItemDetail() {
             <h1>{characterText || t('unknownCharacter')}</h1>
             <h2 className="series" style={{ color: 'var(--text-muted)' }}>{seriesText || t('unknownSeries')}</h2>
           </div>
-          <span className="detail-badge">{t(item.merchandise_type)}</span>
+          {item.merchandise_type && <span className="detail-badge">{t(item.merchandise_type)}</span>}
         </div>
+
+        {missing.length > 0 && (
+          <div className="needs-details-notice">
+            <p>
+              <strong>{t('needsDetails')}</strong>
+              {' '}
+              {t('itemNeedsDetails', { fields: describeMissingDetails(missing, t, lang) })}
+            </p>
+            <button type="button" className="btn btn-secondary" onClick={() => navigate(`/edit/${item.id}`)}>
+              {t('fillInDetails')}
+            </button>
+          </div>
+        )}
 
         {item.notes && (
           <div className="detail-notes form-group">
@@ -84,7 +90,7 @@ export default function ItemDetail() {
             </p>
           </div>
         )}
-        
+
         <div style={{ marginTop: '2rem', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
           {t('addedOn')} {new Date(item.created_at).toLocaleDateString()}
         </div>

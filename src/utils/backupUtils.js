@@ -1,5 +1,7 @@
 import { toValueArray } from './valueUtils';
 import { isWebUrl } from './linkUtils';
+import { mapWithConcurrency } from './concurrencyUtils';
+import { getPhotos } from './photoUtils';
 import { createWishlistEntry, isDateKey } from './wishlistUtils';
 import {
   BACKUP_CONCURRENCY,
@@ -11,26 +13,11 @@ import {
   WISHLIST_STATUSES,
 } from './constants';
 
+export { mapWithConcurrency };
+
 const DATA_URL_PATTERN = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]*={0,2})$/;
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 const WISHLIST_SUBJECT = 'Wishlist entry';
-
-export async function mapWithConcurrency(items, concurrency, mapper) {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
-    }
-  }
-
-  const workerCount = Math.min(Math.max(1, concurrency), items.length);
-  await Promise.all(Array.from({ length: workerCount }, worker));
-  return results;
-}
 
 function dataUrlToBytes(dataUrl) {
   const match = DATA_URL_PATTERN.exec(dataUrl);
@@ -145,6 +132,23 @@ function validatePhoto(photo, index, subject) {
   }
 }
 
+// Format 4 stores `photos`, cover first; earlier formats store at most one `photo`.
+function validatePhotos(record, index, subject) {
+  if (record.photos === undefined) {
+    validatePhoto(record.photo, index, subject);
+    return;
+  }
+  if (!Array.isArray(record.photos) || record.photos.length > BACKUP_LIMITS.maxPhotosPerRecord) {
+    throw new Error(`${subject} at index ${index} has invalid photos`);
+  }
+  for (const photo of record.photos) {
+    if (typeof photo !== 'string') {
+      throw new Error(`${subject} at index ${index} contains invalid photo Data URL`);
+    }
+    validatePhoto(photo, index, subject);
+  }
+}
+
 function isBlank(value) {
   return value === undefined || value === null || value === '';
 }
@@ -158,20 +162,12 @@ function validateItem(item, index, ids) {
   validateValues(item.series, 'series', index);
   validateValues(item.character, 'character', index);
 
-  if (toValueArray(item.series).length === 0 && toValueArray(item.character).length === 0) {
-    throw new Error(`Item at index ${index} must have at least one of series or character`);
-  }
-
-  validateText(
-    item.merchandise_type,
-    'merchandise_type',
-    BACKUP_LIMITS.maxTypeLength,
-    index,
-    { required: true },
-  );
+  // A series or character and a type are not required: an item without them is saved as
+  // needing details, the way an album import leaves it.
+  validateText(item.merchandise_type ?? '', 'merchandise_type', BACKUP_LIMITS.maxTypeLength, index);
   validateText(item.notes ?? '', 'notes', BACKUP_LIMITS.maxNotesLength, index);
   validateTimestamps(item, index, 'Item');
-  validatePhoto(item.photo, index, 'Item');
+  validatePhotos(item, index, 'Item');
 }
 
 // Links render as anchors, so a backup may only carry the same web addresses the form
@@ -232,10 +228,10 @@ function validateWishlistEntry(entry, index, ids) {
   validateChoice(entry.status, WISHLIST_STATUSES, 'status', index);
   validateText(entry.notes ?? '', 'notes', BACKUP_LIMITS.maxNotesLength, index, { subject });
   validateTimestamps(entry, index, subject);
-  validatePhoto(entry.photo, index, subject);
+  validatePhotos(entry, index, subject);
 
   const hasName = typeof entry.name === 'string' && entry.name.trim() !== '';
-  if (!entry.photo && !hasName && !(entry.links?.length > 0)) {
+  if (getPhotos(entry).length === 0 && !hasName && !(entry.links?.length > 0)) {
     throw new Error(`${subject} at index ${index} must have a photo, a name, or a link`);
   }
 }
@@ -289,11 +285,10 @@ function byteLength(text) {
 }
 
 function estimateRecordBytes(record, toMetadata) {
-  const photoBytes = record?.photo instanceof Blob ? record.photo.size : 0;
-  const encodedPhotoBytes = photoBytes
-    ? Math.ceil(photoBytes / 3) * 4 + PHOTO_ENCODING_OVERHEAD_BYTES
-    : 0;
-  const metadataBytes = byteLength(JSON.stringify({ ...toMetadata(record ?? {}), photo: null }));
+  const encodedPhotoBytes = getPhotos(record)
+    .filter(photo => photo instanceof Blob)
+    .reduce((total, photo) => total + Math.ceil(photo.size / 3) * 4 + PHOTO_ENCODING_OVERHEAD_BYTES, 0);
+  const metadataBytes = byteLength(JSON.stringify({ ...toMetadata(record ?? {}), photos: [] }));
   return encodedPhotoBytes + metadataBytes;
 }
 
@@ -340,10 +335,16 @@ async function serializeRecords(records, toMetadata, limitMessage) {
     throw new Error(limitMessage);
   }
 
-  return mapWithConcurrency(records, BACKUP_CONCURRENCY, async record => ({
-    ...toMetadata(record),
-    photo: await serializePhoto(record.photo),
-  }));
+  // Records run four at a time and each record's photos one after another, so no more
+  // than four photos are encoded at once.
+  return mapWithConcurrency(records, BACKUP_CONCURRENCY, async record => {
+    const photos = [];
+    for (const photo of getPhotos(record)) {
+      const dataUrl = await serializePhoto(photo);
+      if (dataUrl) photos.push(dataUrl);
+    }
+    return { ...toMetadata(record), photos };
+  });
 }
 
 export function serializeBackupItems(items) {
@@ -409,19 +410,26 @@ export function validateBackupPayload(payload, expectedVersion) {
   return true;
 }
 
+// Decodes the photos of a backup record, in either the `photos` or the older `photo` form.
+function photosFromBackup(record) {
+  return getPhotos(record).map(dataUrl => {
+    const { mimeType, bytes } = decodeImageDataUrl(dataUrl);
+    return new Blob([bytes], { type: mimeType });
+  });
+}
+
 export async function rehydrateBackupItems(items) {
   return mapWithConcurrency(items, BACKUP_CONCURRENCY, async (item) => {
     const rehydrated = { ...item };
     rehydrated.series = toValueArray(rehydrated.series);
     rehydrated.character = toValueArray(rehydrated.character);
+    rehydrated.merchandise_type = typeof item.merchandise_type === 'string' ? item.merchandise_type : '';
 
     if (rehydrated.created_at) rehydrated.created_at = new Date(rehydrated.created_at);
     if (rehydrated.updated_at) rehydrated.updated_at = new Date(rehydrated.updated_at);
 
-    if (rehydrated.photo && typeof rehydrated.photo === 'string') {
-      const { mimeType, bytes } = decodeImageDataUrl(rehydrated.photo);
-      rehydrated.photo = new Blob([bytes], { type: mimeType });
-    }
+    rehydrated.photos = photosFromBackup(item);
+    delete rehydrated.photo;
 
     return rehydrated;
   });
@@ -451,10 +459,7 @@ export async function rehydrateWishlistEntries(entries) {
     });
 
     if (entry.id !== undefined) rehydrated.id = entry.id;
-    if (typeof entry.photo === 'string') {
-      const { mimeType, bytes } = decodeImageDataUrl(entry.photo);
-      rehydrated.photo = new Blob([bytes], { type: mimeType });
-    }
+    rehydrated.photos = photosFromBackup(entry);
 
     return rehydrated;
   });

@@ -308,3 +308,27 @@
   line-height: 1.5;
   color: var(--text-muted);
 }
+
+/* An item saved without a series or character, or without a type. */
+.needs-details-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.needs-details-notice p {
+  flex: 1 1 14rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.needs-details-notice strong {
+  color: #fbbf24;
+}

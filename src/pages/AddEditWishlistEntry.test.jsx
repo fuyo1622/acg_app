@@ -79,7 +79,7 @@ function storedEntry(fields = {}) {
     priority: 'high',
     status: 'ordered',
     notes: 'Bonus postcard',
-    photo: null,
+    photos: [],
     created_at: new Date('2026-09-01T00:00:00.000Z'),
     updated_at: new Date('2026-09-01T00:00:00.000Z'),
     ...fields,
@@ -140,7 +140,7 @@ describe('AddEditWishlistEntry', () => {
         merchandise_type: '',
         status: 'want',
         priority: 'medium',
-        photo: null,
+        photos: [],
       }));
     });
     expect(routerMocks.navigate).toHaveBeenCalledWith('/wishlist', { replace: true });
@@ -184,7 +184,7 @@ describe('AddEditWishlistEntry', () => {
 
   it('edits an existing entry without recompressing its photo', async () => {
     const photo = new Blob(['screenshot'], { type: 'image/png' });
-    const entry = storedEntry({ photo });
+    const entry = storedEntry({ photos: [photo] });
     routerMocks.params = { id: '7' };
     mockLiveQueries({ wishlist: [entry], editEntry: entry });
 
@@ -208,7 +208,7 @@ describe('AddEditWishlistEntry', () => {
         merchandise_type: 'Nendoroid',
         status: 'ordered',
         priority: 'high',
-        photo,
+        photos: [photo],
       }));
     });
     expect(compressImage).not.toHaveBeenCalled();
