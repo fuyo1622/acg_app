@@ -92,3 +92,35 @@ export function compressImage(file) {
     })();
   });
 }
+
+export const THUMBNAIL_SIZE = 320;
+
+// A small JPEG for screens that show many photos at once, such as the album import grid:
+// a full 1600px photo takes several megabytes of memory on screen, a thumbnail a fraction
+// of that. Returns the photo itself when it is already small or cannot be decoded.
+export async function createThumbnail(photo, size = THUMBNAIL_SIZE) {
+  try {
+    const bitmap = await createImageBitmap(photo);
+    const scale = size / Math.max(bitmap.width, bitmap.height);
+    if (scale >= 1) {
+      bitmap.close();
+      return photo;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return photo;
+    }
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const thumbnail = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    return thumbnail ?? photo;
+  } catch {
+    return photo;
+  }
+}

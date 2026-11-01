@@ -1,6 +1,6 @@
 # ACG Collector Privacy Notice
 
-Effective date: 2026-10-08
+Effective date: 2026-11-01
 
 ## 繁體中文
 
@@ -12,7 +12,7 @@ ACG Collector 是 local-first 的 Progressive Web App。收藏與願望清單的
 
 ### 照片與備份
 
-照片在支援的瀏覽器中會先於裝置端嘗試壓縮，再儲存在 IndexedDB。匯出的 JSON 備份未加密，可能包含收藏與願望清單的名稱、備註、連結、價格及以 Data URL 編碼的照片。請將備份視為私人資料並妥善保管。
+照片在支援的瀏覽器中會先於裝置端嘗試壓縮，再儲存在 IndexedDB。匯出的備份檔（ZIP 壓縮檔）未加密，可能包含收藏與願望清單的名稱、備註、連結、價格及照片。請將備份視為私人資料並妥善保管。
 
 匯入備份會在確認後取代目前的收藏與願望清單；0.4.0 之前建立的備份只含收藏，匯入時會保留目前的願望清單。除非使用者自行匯出備份，專案擁有者無法復原遺失的本機資料。
 
@@ -32,9 +32,9 @@ App runtime 不會載入 Google Fonts 或其他第三方字型服務。正式網
 
 ### 問題回報表單
 
-首頁的「問題回報」連結會離開 App 並開啟由 Tally 提供的外部表單。只有使用者主動送出表單時，Tally 才會接收回報內容、選填的聯絡 Email、選填的圖片附件，以及服務運作所需的標準請求資訊。App 不會自動將 IndexedDB 收藏內容或 JSON 備份傳送到表單。
+首頁的「問題回報」連結會離開 App 並開啟由 Tally 提供的外部表單。只有使用者主動送出表單時，Tally 才會接收回報內容、選填的聯絡 Email、選填的圖片附件，以及服務運作所需的標準請求資訊。App 不會自動將 IndexedDB 收藏內容或備份檔傳送到表單。
 
-請勿在表單中上傳 JSON 備份、私人收藏照片、密碼或其他敏感資料。表單回報會保留在專案擁有者的 Tally 工作區，直到由專案擁有者刪除；Tally 的資料處理另依其隱私政策辦理。
+請勿在表單中上傳備份檔、私人收藏照片、密碼或其他敏感資料。表單回報會保留在專案擁有者的 Tally 工作區，直到由專案擁有者刪除；Tally 的資料處理另依其隱私政策辦理。
 
 ### 聯絡方式
 
@@ -50,7 +50,7 @@ The hosting provider may process standard HTTP request information, such as IP a
 
 ### Photos and backups
 
-Supported browsers attempt to compress selected photos on the device before storing them in IndexedDB. Exported JSON backups are not encrypted and may contain collection and wishlist names, notes, links, prices, and photos encoded as Data URLs. Treat backup files as private data and store them securely.
+Supported browsers attempt to compress selected photos on the device before storing them in IndexedDB. Exported backup files (ZIP archives) are not encrypted and may contain collection and wishlist names, notes, links, prices, and photos. Treat backup files as private data and store them securely.
 
 Importing a backup replaces the current collection and wishlist after confirmation. A backup made before version 0.4.0 holds only the collection, so importing it keeps the current wishlist. The project owner cannot recover lost local data unless the user previously exported a backup.
 
@@ -70,9 +70,9 @@ Links saved in the wishlist, such as shop pages, open the external site in a new
 
 ### Feedback form
 
-The **Send feedback** link leaves the app and opens an external form provided by Tally. Tally receives the report content, optional contact email, optional image attachment, and standard request information needed to operate the service only when the user submits the form. The app does not automatically transfer IndexedDB collection content or JSON backups to the form.
+The **Send feedback** link leaves the app and opens an external form provided by Tally. Tally receives the report content, optional contact email, optional image attachment, and standard request information needed to operate the service only when the user submits the form. The app does not automatically transfer IndexedDB collection content or backup files to the form.
 
-Do not upload JSON backups, private collection photos, passwords, or other sensitive data. Form submissions remain in the project owner's Tally workspace until the project owner deletes them. Tally processes this data under its own privacy policy.
+Do not upload backup files, private collection photos, passwords, or other sensitive data. Form submissions remain in the project owner's Tally workspace until the project owner deletes them. Tally processes this data under its own privacy policy.
 
 ### Contact
 

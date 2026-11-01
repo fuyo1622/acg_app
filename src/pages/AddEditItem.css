@@ -213,6 +213,9 @@
 /* Specific styling for item detail view overlay */
 .item-detail-page {
   padding-bottom: 4rem;
+  /* Clips the slide-in from the side without making a scroll container, which would stop
+     the header sticking. */
+  overflow-x: clip;
 }
 
 .detail-image-container {

@@ -26,6 +26,7 @@ const dbMocks = vi.hoisted(() => ({
 vi.mock('react-router-dom', () => ({
   useNavigate: () => routerMocks.navigate,
   useParams: () => routerMocks.params,
+  useLocation: () => routerMocks.location ?? { state: null },
 }));
 
 vi.mock('dexie-react-hooks', () => ({

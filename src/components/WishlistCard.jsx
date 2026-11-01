@@ -12,7 +12,8 @@ import {
   getWishlistTitle,
 } from '../utils/wishlistUtils';
 
-export default function WishlistCard({ entry }) {
+// `order` is the list's order of entry ids, which the entry page uses to move between them.
+export default function WishlistCard({ entry, order }) {
   const { t, lang } = useLanguage();
   const cover = getCoverPhoto(entry);
   const imageUrl = useObjectUrl(cover);
@@ -32,6 +33,7 @@ export default function WishlistCard({ entry }) {
   return (
     <Link
       to={`/wishlist/item/${entry.id}`}
+      state={order ? { order } : undefined}
       className="item-card wishlist-card glass-panel"
     >
       <div className="image-container">
