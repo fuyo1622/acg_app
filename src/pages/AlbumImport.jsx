@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Combine, Images, Ungroup, X } from 'lucide-react';
+import { ArrowLeft, Check, Combine, ImagePlus, Images, Ungroup, X } from 'lucide-react';
 import { db } from '../services/db';
 import AppDialog from '../components/AppDialog';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -8,7 +8,7 @@ import { useObjectUrls } from '../hooks/useObjectUrl';
 import { takeAlbumFiles } from '../utils/albumHandoff';
 import { mapWithConcurrency } from '../utils/concurrencyUtils';
 import { ALBUM_IMPORT_LIMIT, BACKUP_LIMITS, PHOTO_PROCESSING_CONCURRENCY } from '../utils/constants';
-import { compressImage } from '../utils/imageUtils';
+import { compressImage, createThumbnail } from '../utils/imageUtils';
 import { isImageFile } from '../utils/photoUtils';
 import { createWishlistEntry, readPreferredCurrency } from '../utils/wishlistUtils';
 import './AddEditItem.css';
@@ -30,7 +30,8 @@ function createCollectionItem(photos, createdAt) {
 
 // Turns chosen photos into collection items or wishlist entries. Every photo starts as its
 // own item; photos of the same item are merged, and the first photo of each item is its
-// cover. Collection items are saved without details and marked as needing them.
+// cover. Photos can be added in several rounds, such as one album at a time. Collection
+// items are saved without details and marked as needing them.
 export default function AlbumImport({ target }) {
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -46,18 +47,28 @@ export default function AlbumImport({ target }) {
   const inputRef = useRef(null);
   const nextKeyRef = useRef(1);
   const startedRef = useRef(false);
+  // Tiles show small thumbnails: up to 100 full-size photos on screen could run a phone
+  // out of memory. The full photos are what gets saved.
+  const thumbnailsRef = useRef(new WeakMap());
 
-  const covers = useMemo(() => groups.map(group => group.photos[0]), [groups]);
+  const covers = useMemo(
+    () => groups.map(group => thumbnailsRef.current.get(group.photos[0]) ?? group.photos[0]),
+    [groups],
+  );
   const coverUrls = useObjectUrls(covers);
 
-  const processFiles = useCallback(async (files) => {
+  // `existingCount` is the number of photos already in this import, which shares one limit.
+  const processFiles = useCallback(async (files, existingCount = 0) => {
     const images = files.filter(isImageFile);
     if (images.length === 0) {
       setNotice(t('albumNoImages'));
       return;
     }
-    if (images.length > ALBUM_IMPORT_LIMIT) {
-      setNotice(t('albumTooMany', { max: ALBUM_IMPORT_LIMIT }));
+    const room = ALBUM_IMPORT_LIMIT - existingCount;
+    if (images.length > room) {
+      setNotice(existingCount > 0
+        ? t('albumTooManyMore', { max: ALBUM_IMPORT_LIMIT, remaining: room })
+        : t('albumTooMany', { max: ALBUM_IMPORT_LIMIT }));
       return;
     }
 
@@ -67,17 +78,18 @@ export default function AlbumImport({ target }) {
       let done = 0;
       const photos = await mapWithConcurrency(images, PHOTO_PROCESSING_CONCURRENCY, async (file) => {
         const photo = await compressImage(file);
+        thumbnailsRef.current.set(photo, await createThumbnail(photo));
         done += 1;
         setProgress({ done, total: images.length });
         return photo;
       });
-      setGroups(photos.map(photo => ({ key: nextKeyRef.current++, photos: [photo] })));
-      setSelectedKeys([]);
+      // New photos join the end, so the tiles and selection from earlier rounds stay as they are.
+      setGroups(current => [...current, ...photos.map(photo => ({ key: nextKeyRef.current++, photos: [photo] }))]);
       setPhase('group');
     } catch (error) {
       console.error('Error preparing album photos:', error);
       setNotice(t('saveError'));
-      setPhase('pick');
+      setPhase(existingCount > 0 ? 'group' : 'pick');
     }
   }, [t]);
 
@@ -90,13 +102,16 @@ export default function AlbumImport({ target }) {
     if (files.length > 0) processFiles(files);
   }, [processFiles]);
 
+  const photoCount = groups.reduce((count, group) => count + group.photos.length, 0);
+
   const handlePick = (event) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (files.length > 0) processFiles(files);
+    if (files.length > 0) processFiles(files, photoCount);
   };
 
   const isSaving = phase === 'saving';
+  const isBusy = isSaving || phase === 'processing';
   const selectedGroups = groups.filter(group => selectedKeys.includes(group.key));
   const canMerge = selectedGroups.length >= 2;
   const canSplit = selectedGroups.some(group => group.photos.length > 1);
@@ -162,7 +177,7 @@ export default function AlbumImport({ target }) {
   };
 
   const leave = () => {
-    if (phase === 'group' && groups.length > 0) {
+    if (groups.length > 0) {
       setLeavePromptOpen(true);
       return;
     }
@@ -200,10 +215,12 @@ export default function AlbumImport({ target }) {
       )}
 
       {phase === 'processing' && (
-        <p className="album-progress" role="status">{t('albumProcessing', progress)}</p>
+        <p className={`album-progress${groups.length > 0 ? ' is-compact' : ''}`} role="status">
+          {t('albumProcessing', progress)}
+        </p>
       )}
 
-      {(phase === 'group' || isSaving) && (
+      {groups.length > 0 && (
         <>
           <p className="album-hint">{t('albumGroupHint')}</p>
           <ul className="album-grid">
@@ -217,7 +234,7 @@ export default function AlbumImport({ target }) {
                     aria-pressed={isSelected}
                     aria-label={t('albumGroupLabel', { index: index + 1, count: group.photos.length })}
                     onClick={() => toggleGroup(group.key)}
-                    disabled={isSaving}
+                    disabled={isBusy}
                   >
                     {coverUrls[index] && <img src={coverUrls[index]} alt="" />}
                     {group.photos.length > 1 && (
@@ -235,15 +252,28 @@ export default function AlbumImport({ target }) {
                 </li>
               );
             })}
+            {photoCount < ALBUM_IMPORT_LIMIT && (
+              <li>
+                <button
+                  type="button"
+                  className="album-tile album-tile-add glass-panel"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={isBusy}
+                >
+                  <ImagePlus size={24} aria-hidden="true" />
+                  <span>{t('addMorePhotos')}</span>
+                </button>
+              </li>
+            )}
           </ul>
 
           <div className="album-actions">
             <div className="album-tools">
-              <button type="button" className="btn btn-secondary" onClick={mergeSelected} disabled={!canMerge || isSaving}>
+              <button type="button" className="btn btn-secondary" onClick={mergeSelected} disabled={!canMerge || isBusy}>
                 <Combine size={18} aria-hidden="true" />
                 {t('mergeGroups')}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={splitSelected} disabled={!canSplit || isSaving}>
+              <button type="button" className="btn btn-secondary" onClick={splitSelected} disabled={!canSplit || isBusy}>
                 <Ungroup size={18} aria-hidden="true" />
                 {t('splitGroups')}
               </button>
@@ -251,7 +281,7 @@ export default function AlbumImport({ target }) {
                 type="button"
                 className="btn btn-secondary"
                 onClick={removeSelected}
-                disabled={selectedKeys.length === 0 || isSaving}
+                disabled={selectedKeys.length === 0 || isBusy}
               >
                 <X size={18} aria-hidden="true" />
                 {t('removeFromImport')}
@@ -261,7 +291,7 @@ export default function AlbumImport({ target }) {
               type="button"
               className="btn btn-primary album-add"
               onClick={addAll}
-              disabled={groups.length === 0 || isSaving}
+              disabled={groups.length === 0 || isBusy}
             >
               {isSaving ? t('saving') : t('addImportedItems', { count: groups.length })}
             </button>

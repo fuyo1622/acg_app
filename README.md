@@ -13,8 +13,8 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 
 - Store collection data and photos locally with IndexedDB.
 - Add, edit, delete, search, and filter merchandise records.
-- Import an album: choose up to 30 photos at once, merge the photos of the same item,
-  and fill in the series, character, and type later. Items still missing them are marked
+- Import an album: choose up to 100 photos, in one or more rounds, merge the photos of
+  the same item, and fill in the series, character, and type later. Items still missing them are marked
   Needs details and can be listed on their own.
 - Keep a separate wishlist of merchandise you want, with shop links, prices, order
   deadlines, and priorities. Import several screenshots at once and fill in details later,

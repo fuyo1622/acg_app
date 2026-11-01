@@ -55,5 +55,5 @@ export const WISHLIST_LIMITS = Object.freeze({
 // Each photo chosen for an album import is decoded and re-encoded, so an import is
 // bounded in size and photos are processed two at a time to keep memory use predictable
 // on phones.
-export const ALBUM_IMPORT_LIMIT = 30;
+export const ALBUM_IMPORT_LIMIT = 100;
 export const PHOTO_PROCESSING_CONCURRENCY = 2;
