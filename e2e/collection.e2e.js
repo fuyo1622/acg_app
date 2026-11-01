@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { photoTest, png } from './fixtures';
+import { photoTest, png, solidPng } from './fixtures';
 
 async function useEnglish(page) {
   await page.goto('/');
@@ -193,11 +193,22 @@ test('exports, imports and creates a pre-replacement safety backup', async ({ pa
   await expect(page.getByRole('heading', { name: 'Asuka Langley' })).toBeVisible();
 });
 
-photoTest('imports album photos as unfinished items and fills one in later', async ({ page }) => {
+photoTest('imports album photos as unfinished items and fills one in later', async ({ page, browserName }) => {
+  photoTest.slow(browserName === 'webkit', 'Two photo rounds and three accessibility scans take about 25 s in WebKit');
   await useEnglish(page);
 
-  await page.getByLabel('Album photos').setInputFiles([png('front.png'), png('back.png'), png('other.png')]);
+  await page.getByLabel('Album photos').setInputFiles([png('front.png'), png('back.png')]);
   await expect(page.getByRole('heading', { name: 'Import album' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Item \d+:/ })).toHaveCount(2);
+
+  // A second round, as if from another album, joins the same import. Its tile shows a
+  // thumbnail, while the item keeps the full photo.
+  await expect(page.getByRole('button', { name: 'Add photos' })).toBeVisible();
+  await page.getByLabel('Album photos').setInputFiles([solidPng('shelf.png', 640, 480)]);
+  const shelfTile = page.getByRole('button', { name: 'Item 3: 1 photo(s)' });
+  await expect(shelfTile).toBeVisible();
+  await expect.poll(() => shelfTile.locator('img').evaluate(image => image.naturalWidth)).toBe(320);
+
   await page.getByRole('button', { name: 'Item 1: 1 photo(s)' }).click();
   await page.getByRole('button', { name: 'Item 2: 1 photo(s)' }).click();
   await page.getByRole('button', { name: 'Merge' }).click();
@@ -230,6 +241,10 @@ photoTest('imports album photos as unfinished items and fills one in later', asy
   await page.getByRole('button', { name: 'Show only these' }).click();
   await expect(page.getByRole('link', { name: /Unknown Character/ })).toHaveCount(1);
   await expect(page.getByRole('link', { name: /Evangelion/ })).toHaveCount(0);
+
+  await page.getByRole('link', { name: /Unknown Character/ }).click();
+  const shelfPhoto = page.getByRole('img', { name: 'Untitled' });
+  await expect.poll(() => shelfPhoto.evaluate(image => image.naturalWidth)).toBe(640);
 });
 
 photoTest('keeps every photo of an item through a backup and restore', async ({ page }) => {
