@@ -25,24 +25,24 @@ describe('validateBackupPayload', () => {
     expect(() => validateBackupPayload({ version: BACKUP_VERSION }, BACKUP_VERSION)).toThrow('Backup items missing');
   });
 
-  it('throws on items containing missing merchandise_type', () => {
+  it('accepts unfinished items without a series, character, or type', async () => {
     const payload = {
       version: BACKUP_VERSION,
       items: [
-         { series: 'Evangelion', character: 'Asuka', notes: '' } // missing merchandise_type
-      ]
+        { series: 'Evangelion', character: 'Asuka', notes: '' },
+        { series: '', character: '  ', merchandise_type: '', notes: '', photos: [] },
+      ],
     };
-    expect(() => validateBackupPayload(payload, BACKUP_VERSION)).toThrow('missing merchandise_type');
+    expect(validateBackupPayload(payload, BACKUP_VERSION)).toBe(true);
+
+    const restored = await rehydrateBackupItems(payload.items);
+    expect(restored.map(item => item.merchandise_type)).toEqual(['', '']);
+    expect(restored[1]).toEqual(expect.objectContaining({ series: [], character: [], photos: [] }));
   });
 
-  it('throws on items entirely missing both series and character fields natively', () => {
-    const payload = {
-      version: BACKUP_VERSION,
-      items: [
-         { series: '', character: '  ', merchandise_type: 'figure', notes: '' }
-      ]
-    };
-    expect(() => validateBackupPayload(payload, BACKUP_VERSION)).toThrow('must have at least one of series or character');
+  it('still rejects a type that is not text', () => {
+    const payload = { version: BACKUP_VERSION, items: [{ series: 'Evangelion', merchandise_type: 7 }] };
+    expect(() => validateBackupPayload(payload, BACKUP_VERSION)).toThrow('invalid merchandise_type');
   });
 
   it('throws when photo is not an explicitly defined string mapping to data:image', () => {
@@ -141,7 +141,7 @@ describe('validateBackupPayload', () => {
       .toThrow('MIME type does not match');
   });
 
-  it('rehydrates valid images into typed blobs', async () => {
+  it('restores the single photo of an older backup as the first of the photos', async () => {
     const [item] = await rehydrateBackupItems([{
       series: 'Evangelion',
       character: [],
@@ -149,9 +149,52 @@ describe('validateBackupPayload', () => {
       photo: validPngDataUrl,
     }]);
 
-    expect(item.photo).toBeInstanceOf(Blob);
-    expect(item.photo.type).toBe('image/png');
-    expect(item.photo.size).toBe(8);
+    expect(item).not.toHaveProperty('photo');
+    expect(item.photos).toHaveLength(1);
+    expect(item.photos[0]).toBeInstanceOf(Blob);
+    expect(item.photos[0].type).toBe('image/png');
+    expect(item.photos[0].size).toBe(8);
+  });
+
+  it('accepts several photos per item and restores them in order', async () => {
+    const gifDataUrl = `data:image/gif;base64,${btoa('GIF89a01')}`;
+    const payload = {
+      version: BACKUP_VERSION,
+      items: [{ series: ['Evangelion'], merchandise_type: 'figure', photos: [validPngDataUrl, gifDataUrl] }],
+    };
+    expect(validateBackupPayload(payload, BACKUP_VERSION)).toBe(true);
+
+    const [item] = await rehydrateBackupItems(payload.items);
+    expect(item.photos.map(photo => photo.type)).toEqual(['image/png', 'image/gif']);
+  });
+
+  it('rejects photo lists that are too long or hold anything but image Data URLs', () => {
+    const withPhotos = photos => ({
+      version: BACKUP_VERSION,
+      items: [{ series: ['Evangelion'], merchandise_type: 'figure', photos }],
+    });
+
+    expect(() => validateBackupPayload(
+      withPhotos(Array.from({ length: BACKUP_LIMITS.maxPhotosPerRecord + 1 }, () => validPngDataUrl)),
+      BACKUP_VERSION,
+    )).toThrow('Item at index 0 has invalid photos');
+    expect(() => validateBackupPayload(withPhotos(validPngDataUrl), BACKUP_VERSION)).toThrow('invalid photos');
+    expect(() => validateBackupPayload(withPhotos([7]), BACKUP_VERSION)).toThrow('invalid photo Data URL');
+    expect(() => validateBackupPayload(withPhotos(['bad-data']), BACKUP_VERSION)).toThrow('invalid photo Data URL');
+  });
+
+  it('serializes every photo of a record, and the photo of a record from before version 4', async () => {
+    const png = new Blob([Uint8Array.from(atob('iVBORw0KGgo='), character => character.charCodeAt(0))], {
+      type: 'image/png',
+    });
+    const [current, legacy] = await serializeBackupItems([
+      { id: 1, series: ['A'], merchandise_type: 'figure', photos: [png, png] },
+      { id: 2, series: ['B'], merchandise_type: 'figure', photo: png },
+    ]);
+
+    expect(current.photos).toEqual([validPngDataUrl, validPngDataUrl]);
+    expect(legacy.photos).toEqual([validPngDataUrl]);
+    expect(legacy).not.toHaveProperty('photo');
   });
 
   it('limits mapper concurrency while preserving result order', async () => {
@@ -273,7 +316,7 @@ describe('wishlist backups', () => {
     });
     const stored = {
       ...entry(),
-      photo,
+      photos: [photo, photo],
       created_at: new Date('2026-09-01T00:00:00.000Z'),
       updated_at: new Date('2026-09-02T00:00:00.000Z'),
     };
@@ -286,7 +329,7 @@ describe('wishlist backups', () => {
       currency: 'JPY',
       order_deadline: '2026-10-15',
       created_at: '2026-09-01T00:00:00.000Z',
-      photo: validPngDataUrl,
+      photos: [validPngDataUrl, validPngDataUrl],
     }));
 
     const backup = buildBackupPayload({ items: [], wishlist: [serialized] }, BACKUP_VERSION);
@@ -300,8 +343,9 @@ describe('wishlist backups', () => {
       priority: 'high',
       created_at: new Date('2026-09-01T00:00:00.000Z'),
     }));
-    expect(restored.photo).toBeInstanceOf(Blob);
-    expect(restored.photo.type).toBe('image/png');
+    expect(restored.photos).toHaveLength(2);
+    expect(restored.photos[0]).toBeInstanceOf(Blob);
+    expect(restored.photos[0].type).toBe('image/png');
   });
 
   it('restores only known fields and dates entries that had none', async () => {
@@ -357,6 +401,14 @@ describe('backup size estimation', () => {
     const withPhoto = estimateBackupBytes({ items: [itemWithPhoto(3 * 1024 * 1024)] });
 
     expect(withPhoto - withoutPhoto).toBeGreaterThan(4 * 1024 * 1024);
+  });
+
+  it('counts every photo of a record', () => {
+    const { photo } = itemWithPhoto(3 * 1024 * 1024);
+    const onePhoto = estimateBackupBytes({ items: [{ ...itemWithPhoto(0), photo: null, photos: [photo] }] });
+    const twoPhotos = estimateBackupBytes({ items: [{ ...itemWithPhoto(0), photo: null, photos: [photo, photo] }] });
+
+    expect(twoPhotos - onePhoto).toBeGreaterThan(4 * 1024 * 1024);
   });
 
   it('counts multi-byte notes as their encoded length', () => {

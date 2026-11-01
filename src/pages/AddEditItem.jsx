@@ -3,15 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { ArrowLeft, Camera, PackageCheck, Save, Trash2 } from 'lucide-react';
-import ImageUploader from '../components/ImageUploader';
 import MultiSelectCombobox from '../components/MultiSelectCombobox';
 import AppDialog from '../components/AppDialog';
+import PhotoListEditor from '../components/PhotoListEditor';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
-import { DEFAULT_TYPES } from '../utils/constants';
-import { validateItem } from '../utils/validationUtils';
+import { BACKUP_LIMITS, DEFAULT_TYPES } from '../utils/constants';
+import { describeMissingDetails, getMissingDetails } from '../utils/validationUtils';
 import { getUniqueValues } from '../utils/filterUtils';
-import { compressImage } from '../utils/imageUtils';
+import { getCoverPhoto, getPhotos, isImageFile, preparePhotosForSaving } from '../utils/photoUtils';
 import { isSameValue, toValueArray } from '../utils/valueUtils';
 import { getWishlistTitle, notesForCollection } from '../utils/wishlistUtils';
 import './AddEditItem.css';
@@ -31,12 +31,13 @@ export default function AddEditItem({ mode }) {
     merchandise_type: '', // Empty means nothing selected yet
     notes: '',
   });
-  const [photo, setPhoto] = useState(null);
+  const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(isEditing || isMoving);
   const [isSaving, setIsSaving] = useState(false);
   const [customType, setCustomType] = useState('');
   const [notice, setNotice] = useState(null);
   const [deletePromptOpen, setDeletePromptOpen] = useState(false);
+  const [unfinishedPromptOpen, setUnfinishedPromptOpen] = useState(false);
   // Moving starts by asking for a photo of the item that arrived.
   const [isPhotoStepDone, setIsPhotoStepDone] = useState(!isMoving);
   const movePhotoInputRef = useRef(null);
@@ -74,7 +75,8 @@ export default function AddEditItem({ mode }) {
     [recordId, isMoving],
   );
   const movingEntry = isMoving ? loadedEntry?.entry : null;
-  const wishlistPhotoUrl = useObjectUrl(movingEntry?.photo);
+  const wishlistPhotoCount = getPhotos(movingEntry).length;
+  const wishlistPhotoUrl = useObjectUrl(getCoverPhoto(movingEntry));
 
   // Fill the form once, and only after the type list has loaded. Classifying the type
   // against an empty list would push an already-listed type into the free-text box.
@@ -107,10 +109,15 @@ export default function AddEditItem({ mode }) {
       merchandise_type: selectedType,
       notes: isMoving ? notesForCollection(record, lang) : (record.notes || ''),
     });
-    setPhoto(record.photo ?? null);
+    setPhotos(getPhotos(record));
     isFormInitialized.current = true;
     setLoading(false);
   }, [isEditing, isMoving, loadedItem, loadedEntry, allItems, uniqueCustomTypes, navigate, lang]);
+
+  const currentType = formData.merchandise_type === '__custom__'
+    ? customType.trim()
+    : formData.merchandise_type;
+  const missingDetails = getMissingDetails({ ...formData, merchandise_type: currentType });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -121,47 +128,25 @@ export default function AddEditItem({ mode }) {
     setFormData(prev => ({ ...prev, [name]: values }));
   };
 
-  const handleImageSelected = (file) => {
-    setPhoto(file);
-  };
-
+  // The new photos replace the wishlist's; skipping the step keeps the wishlist's.
   const handleMovePhoto = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setPhoto(file);
+    const files = Array.from(event.target.files ?? [])
+      .filter(isImageFile)
+      .slice(0, BACKUP_LIMITS.maxPhotosPerRecord);
+    event.target.value = '';
+    if (files.length === 0) return;
+    setPhotos(files);
     setIsPhotoStepDone(true);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isSaving) return;
-    
-    let finalType = formData.merchandise_type;
-    if (finalType === '__custom__') {
-      finalType = customType.trim();
-    }
-
-    const { isValid, errorKey } = validateItem({
-      ...formData,
-      merchandise_type: finalType
-    });
-
-    if (!isValid) {
-      setNotice({ title: t('errorTitle'), message: t(errorKey) });
-      return;
-    }
-
+  const saveItem = async () => {
+    setUnfinishedPromptOpen(false);
     setIsSaving(true);
     try {
-      let processedPhoto = photo;
-      if (photo instanceof File) {
-        processedPhoto = await compressImage(photo);
-      }
-
       const itemData = {
         ...formData,
-        merchandise_type: finalType,
-        photo: processedPhoto,
+        merchandise_type: currentType,
+        photos: await preparePhotosForSaving(photos),
         updated_at: new Date()
       };
 
@@ -189,6 +174,18 @@ export default function AddEditItem({ mode }) {
       setNotice({ title: t('errorTitle'), message: t('saveError') });
       setIsSaving(false);
     }
+  };
+
+  // Missing details do not block saving. After the user confirms, the item is saved and
+  // marked as needing them.
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (isSaving) return;
+    if (missingDetails.length > 0) {
+      setUnfinishedPromptOpen(true);
+      return;
+    }
+    saveItem();
   };
 
   const handleDelete = async () => {
@@ -235,9 +232,11 @@ export default function AddEditItem({ mode }) {
           {wishlistPhotoUrl && (
             <img className="move-wishlist-photo" src={wishlistPhotoUrl} alt={t('moveWishlistPhoto')} />
           )}
+          {wishlistPhotoCount > 1 && <p>{t('photoCount', { count: wishlistPhotoCount })}</p>}
           <input
             type="file"
             accept="image/*"
+            multiple
             aria-label={t('movePhotoFile')}
             className="sr-only"
             ref={movePhotoInputRef}
@@ -249,7 +248,7 @@ export default function AddEditItem({ mode }) {
               {t('moveTakePhoto')}
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => setIsPhotoStepDone(true)}>
-              {t(movingEntry?.photo ? 'moveSkipUseWishlistPhoto' : 'moveSkip')}
+              {t(wishlistPhotoCount > 0 ? 'moveSkipUseWishlistPhoto' : 'moveSkip')}
             </button>
           </div>
         </section>
@@ -267,8 +266,13 @@ export default function AddEditItem({ mode }) {
       {header}
 
       <form onSubmit={handleSubmit} className="item-form">
-        <ImageUploader defaultImage={photo} onImageSelected={handleImageSelected} />
+        <PhotoListEditor photos={photos} onChange={setPhotos} />
         {isMoving && <p className="move-form-hint">{t('moveFormHint')}</p>}
+        {isEditing && missingDetails.length > 0 && (
+          <p className="move-form-hint">
+            {t('itemNeedsDetails', { fields: describeMissingDetails(missingDetails, t, lang) })}
+          </p>
+        )}
 
         <div className="form-group">
           <label htmlFor="series">{t('seriesFranchise')}</label>
@@ -301,12 +305,11 @@ export default function AddEditItem({ mode }) {
         <div className="form-group">
           <label htmlFor="merchandise_type">{t('merchandiseType')}</label>
           <div className="select-wrapper glass-panel">
-            <select 
-              id="merchandise_type" 
-              name="merchandise_type" 
-              value={formData.merchandise_type} 
+            <select
+              id="merchandise_type"
+              name="merchandise_type"
+              value={formData.merchandise_type}
               onChange={handleChange}
-              required
             >
               <option value="" disabled>---</option>
               {DEFAULT_TYPES.map(type => (
@@ -318,15 +321,14 @@ export default function AddEditItem({ mode }) {
               <option value="__custom__">➕ {t('addSelfDefinedType')}</option>
             </select>
           </div>
-          
+
           {formData.merchandise_type === '__custom__' && (
-            <input 
-              type="text" 
-              value={customType} 
-              onChange={(e) => setCustomType(e.target.value)} 
+            <input
+              type="text"
+              value={customType}
+              onChange={(e) => setCustomType(e.target.value)}
               placeholder={t('typeToSearch')}
               style={{marginTop: '0.75rem'}}
-              required
               autoFocus
             />
           )}
@@ -334,11 +336,11 @@ export default function AddEditItem({ mode }) {
 
         <div className="form-group">
           <label htmlFor="notes">{t('notesOptional')}</label>
-          <textarea 
-            id="notes" 
-            name="notes" 
-            value={formData.notes} 
-            onChange={handleChange} 
+          <textarea
+            id="notes"
+            name="notes"
+            value={formData.notes}
+            onChange={handleChange}
             placeholder={t('notesPlaceholder')}
             rows="3"
           />
@@ -356,6 +358,15 @@ export default function AddEditItem({ mode }) {
         </div>
       </form>
 
+      <AppDialog
+        open={unfinishedPromptOpen}
+        title={t('saveUnfinishedTitle')}
+        message={t('saveUnfinishedMessage', { fields: describeMissingDetails(missingDetails, t, lang) })}
+        confirmLabel={t('saveUnfinished')}
+        cancelLabel={t('keepEditing')}
+        onConfirm={saveItem}
+        onCancel={() => setUnfinishedPromptOpen(false)}
+      />
       <AppDialog
         open={deletePromptOpen}
         title={t('deleteTitle')}

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import AddEditItem from './pages/AddEditItem';
+import AlbumImport from './pages/AlbumImport';
 import ItemDetail from './pages/ItemDetail';
 import Wishlist from './pages/Wishlist';
 import AddEditWishlistEntry from './pages/AddEditWishlistEntry';
@@ -20,10 +21,12 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/add" element={<AddEditItem />} />
+              <Route path="/import" element={<AlbumImport target="collection" />} />
               <Route path="/edit/:id" element={<AddEditItem />} />
               <Route path="/item/:id" element={<ItemDetail />} />
               <Route path="/wishlist" element={<Wishlist />} />
               <Route path="/wishlist/add" element={<AddEditWishlistEntry />} />
+              <Route path="/wishlist/import" element={<AlbumImport target="wishlist" />} />
               <Route path="/wishlist/edit/:id" element={<AddEditWishlistEntry />} />
               <Route path="/wishlist/item/:id" element={<WishlistDetail />} />
               <Route path="/wishlist/move/:id" element={<AddEditItem mode="move" />} />

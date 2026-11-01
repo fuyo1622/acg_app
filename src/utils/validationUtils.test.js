@@ -1,44 +1,46 @@
 import { describe, it, expect } from 'vitest';
-import { validateItem } from './validationUtils';
+import { describeMissingDetails, getMissingDetails, needsDetails } from './validationUtils';
 
-describe('validateItem', () => {
-  it('fails if neither series nor character is provided', () => {
-    const result = validateItem({ series: '   ', character: '', merchandise_type: 'figure' });
-    expect(result.isValid).toBe(false);
-    expect(result.errorKey).toBe('validationRequireOne');
+describe('getMissingDetails', () => {
+  it('reports a missing series or character', () => {
+    expect(getMissingDetails({ series: '   ', character: '', merchandise_type: 'figure' }))
+      .toEqual(['seriesOrCharacter']);
   });
 
-  it('succeeds if only series is provided', () => {
-    const result = validateItem({ series: 'Evangelion', character: '', merchandise_type: 'figure' });
-    expect(result.isValid).toBe(true);
-  });
-
-  it('succeeds if only character is provided', () => {
-    const result = validateItem({ series: '', character: 'Asuka', merchandise_type: 'figure' });
-    expect(result.isValid).toBe(true);
-  });
-
-  it('supports multiple series and characters', () => {
-    const result = validateItem({
-      series: ['Evangelion', 'Rebuild of Evangelion'],
+  it('accepts a series alone, a character alone, or several of each', () => {
+    expect(getMissingDetails({ series: 'Evangelion', character: '', merchandise_type: 'figure' })).toEqual([]);
+    expect(getMissingDetails({ series: '', character: 'Asuka', merchandise_type: 'figure' })).toEqual([]);
+    expect(getMissingDetails({
+      series: ['Evangelion', 'Rebuild'],
       character: ['Asuka', 'Rei'],
       merchandise_type: 'figure',
-    });
-    expect(result.isValid).toBe(true);
+    })).toEqual([]);
   });
 
-  it('fails if merchandise type is missing or __custom__', () => {
-    const missingType = validateItem({ series: 'A', character: 'B', merchandise_type: '' });
-    expect(missingType.isValid).toBe(false);
-    expect(missingType.errorKey).toBe('validationRequireType');
-
-    const customTypePlaceholder = validateItem({ series: 'A', character: 'B', merchandise_type: '__custom__' });
-    expect(customTypePlaceholder.isValid).toBe(false);
-    expect(customTypePlaceholder.errorKey).toBe('validationRequireType');
+  it('reports a missing type, including the unfinished custom choice', () => {
+    expect(getMissingDetails({ series: 'A', character: 'B', merchandise_type: '' })).toEqual(['merchandiseType']);
+    expect(getMissingDetails({ series: 'A', character: 'B', merchandise_type: '__custom__' }))
+      .toEqual(['merchandiseType']);
+    expect(getMissingDetails({ series: 'A', character: 'B', merchandise_type: 'acrylic stand' })).toEqual([]);
   });
 
-  it('succeeds with custom type text', () => {
-    const result = validateItem({ series: 'A', character: 'B', merchandise_type: 'acrylic stand' });
-    expect(result.isValid).toBe(true);
+  it('lists everything an album-imported item still lacks', () => {
+    const imported = { series: [], character: [], merchandise_type: '', photos: [] };
+    expect(getMissingDetails(imported)).toEqual(['seriesOrCharacter', 'merchandiseType']);
+    expect(needsDetails(imported)).toBe(true);
+    expect(needsDetails({ series: ['A'], character: [], merchandise_type: 'plush' })).toBe(false);
+  });
+});
+
+describe('describeMissingDetails', () => {
+  const labels = { missingSeriesOrCharacter: 'a series or character', missingType: 'a type' };
+  const t = key => labels[key];
+
+  it('joins the missing details for the interface language', () => {
+    expect(describeMissingDetails(['seriesOrCharacter', 'merchandiseType'], t, 'en'))
+      .toBe('a series or character and a type');
+    expect(describeMissingDetails(['seriesOrCharacter', 'merchandiseType'], t, 'zh-TW'))
+      .toBe('a series or character、a type');
+    expect(describeMissingDetails(['merchandiseType'], t, 'en')).toBe('a type');
   });
 });

@@ -1,0 +1,128 @@
+.album-import {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.album-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.album-pick p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.album-pick-limit {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.album-progress {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.album-hint {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(30%, 8rem), 1fr));
+  gap: 0.6rem;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 1rem;
+}
+
+.album-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  overflow: hidden;
+  border: 3px solid transparent;
+  cursor: pointer;
+}
+
+.album-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-tile.is-selected {
+  border-color: var(--accent-primary);
+}
+
+.album-tile.is-selected img {
+  opacity: 0.75;
+}
+
+.album-tile-count {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.album-tile-check {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* The actions stay within reach at the bottom of the screen while the grid scrolls. */
+.album-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem 0 1rem;
+  background: var(--bg-dark);
+}
+
+.album-tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.album-tools .btn {
+  padding: 0.65rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.album-tools .btn:disabled,
+.album-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

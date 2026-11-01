@@ -8,8 +8,9 @@ export const DEFAULT_TYPES = [
   'other'
 ];
 
-// Version 3 added the wishlist section. Older backups contain only the collection.
-export const BACKUP_VERSION = 3;
+// Version 3 added the wishlist section and version 4 several photos per record. Older
+// backups contain only the collection, and at most one photo per record.
+export const BACKUP_VERSION = 4;
 export const WISHLIST_BACKUP_VERSION = 3;
 
 export const BACKUP_LIMITS = Object.freeze({
@@ -20,6 +21,7 @@ export const BACKUP_LIMITS = Object.freeze({
   maxTypeLength: 100,
   maxNotesLength: 5000,
   maxPhotoBytes: 10 * 1024 * 1024,
+  maxPhotosPerRecord: 10,
 });
 
 export const BACKUP_CONCURRENCY = 4;
@@ -50,7 +52,8 @@ export const WISHLIST_LIMITS = Object.freeze({
   maxPrice: 1_000_000_000,
 });
 
-// Each chosen screenshot is decoded and re-encoded, so a batch is bounded in size and
-// processed two at a time to keep memory use predictable on phones.
-export const QUICK_ADD_LIMIT = 30;
-export const QUICK_ADD_CONCURRENCY = 2;
+// Each photo chosen for an album import is decoded and re-encoded, so an import is
+// bounded in size and photos are processed two at a time to keep memory use predictable
+// on phones.
+export const ALBUM_IMPORT_LIMIT = 30;
+export const PHOTO_PROCESSING_CONCURRENCY = 2;

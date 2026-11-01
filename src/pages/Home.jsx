@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
-import { Filter, Plus, Search } from 'lucide-react';
+import { Filter, Images, Plus, Search } from 'lucide-react';
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
+import AppDialog from '../components/AppDialog';
 import AppFooter from '../components/AppFooter';
 import AppHeader from '../components/AppHeader';
 import ItemCard from '../components/ItemCard';
 import Pagination from '../components/Pagination';
+import { useImportedNotice } from '../hooks/useImportedNotice';
+import { handOffAlbumFiles } from '../utils/albumHandoff';
 import { COLLECTION_PAGE_SIZE, DEFAULT_TYPES } from '../utils/constants';
 import { filterItems, getUniqueValues, resolveFilterValue } from '../utils/filterUtils';
+import { needsDetails } from '../utils/validationUtils';
 import './Home.css';
 
 export default function Home() {
@@ -19,7 +23,10 @@ export default function Home() {
   const [filterType, setFilterType] = useState('all');
   const [filterSeries, setFilterSeries] = useState('all');
   const [filterCharacter, setFilterCharacter] = useState('all');
+  const [onlyNeedingDetails, setOnlyNeedingDetails] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [importedCount, closeImportedNotice] = useImportedNotice();
+  const albumInputRef = useRef(null);
 
   const items = useLiveQuery(
     () => db.items.orderBy('created_at').reverse().toArray(),
@@ -27,7 +34,23 @@ export default function Home() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterType, filterSeries, filterCharacter]);
+  }, [searchTerm, filterType, filterSeries, filterCharacter, onlyNeedingDetails]);
+
+  const needingDetailsCount = useMemo(() => (items ?? []).filter(needsDetails).length, [items]);
+
+  // Once the last item is completed, the filter would leave an empty gallery.
+  useEffect(() => {
+    if (needingDetailsCount === 0) setOnlyNeedingDetails(false);
+  }, [needingDetailsCount]);
+
+  // The picker opens here, on the tap; the import page receives the chosen files.
+  const handleAlbumPick = (event) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+    handOffAlbumFiles(files);
+    navigate('/import');
+  };
 
   const getTypeLabel = useCallback(
     (type) => (DEFAULT_TYPES.includes(type) ? t(type) : type),
@@ -50,15 +73,18 @@ export default function Home() {
   }, [items, uniqueSeries, uniqueCharacters, uniqueCustomTypes]);
 
   const filteredItems = useMemo(
-    () => filterItems({
-      items,
-      searchTerm,
-      filterType,
-      filterSeries,
-      filterCharacter,
-      getTypeLabel,
-    }),
-    [items, searchTerm, filterType, filterSeries, filterCharacter, getTypeLabel],
+    () => {
+      const matches = filterItems({
+        items,
+        searchTerm,
+        filterType,
+        filterSeries,
+        filterCharacter,
+        getTypeLabel,
+      });
+      return onlyNeedingDetails ? matches.filter(needsDetails) : matches;
+    },
+    [items, searchTerm, filterType, filterSeries, filterCharacter, getTypeLabel, onlyNeedingDetails],
   );
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / COLLECTION_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, pageCount);
@@ -125,6 +151,36 @@ export default function Home() {
       </AppHeader>
 
       <main>
+        <div className="list-toolbar">
+          <button type="button" className="btn btn-secondary" onClick={() => albumInputRef.current?.click()}>
+            <Images size={18} aria-hidden="true" />
+            {t('importAlbum')}
+          </button>
+          <p>{t('importAlbumHint')}</p>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            aria-label={t('albumPhotos')}
+            className="sr-only"
+            ref={albumInputRef}
+            onChange={handleAlbumPick}
+          />
+        </div>
+
+        {needingDetailsCount > 0 && (
+          <div className="needs-details-banner glass-panel">
+            <span>{t('needsDetailsCount', { count: needingDetailsCount })}</span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setOnlyNeedingDetails(only => !only)}
+            >
+              {t(onlyNeedingDetails ? 'showAllItems' : 'showNeedsDetails')}
+            </button>
+          </div>
+        )}
+
         <div className="gallery-grid">
           {items === undefined ? (
             <div className="loading">{t('loadingCollection')}</div>
@@ -158,6 +214,14 @@ export default function Home() {
       <button type="button" className="fab" onClick={() => navigate('/add')} aria-label={t('addItem')}>
         <Plus size={28} aria-hidden="true" />
       </button>
+
+      <AppDialog
+        open={importedCount !== null}
+        title={t('successTitle')}
+        message={t('albumImportDone', { count: importedCount ?? 0 })}
+        confirmLabel={t('close')}
+        onConfirm={closeImportedNotice}
+      />
     </div>
   );
 }

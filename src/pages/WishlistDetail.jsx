@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Edit2, ExternalLink, ImageOff, MessageSquare, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Edit2, ExternalLink, MessageSquare, PackageCheck } from 'lucide-react';
 import { db } from '../services/db';
+import PhotoGallery from '../components/PhotoGallery';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useObjectUrl } from '../hooks/useObjectUrl';
+import { getPhotos } from '../utils/photoUtils';
 import {
   DEFAULT_TYPES,
   WISHLIST_PRIORITY_LABELS,
@@ -26,7 +27,6 @@ export default function WishlistDetail() {
   const { id } = useParams();
   const { t, lang } = useLanguage();
   const entryId = Number.parseInt(id, 10);
-  const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   const entry = useLiveQuery(
     async () => {
@@ -36,7 +36,7 @@ export default function WishlistDetail() {
     [entryId],
   );
 
-  const url = useObjectUrl(entry?.photo);
+  const photos = useMemo(() => getPhotos(entry), [entry]);
 
   if (entry === undefined) return <div className="loading">{t('loading')}</div>;
   if (entry === null) {
@@ -91,27 +91,8 @@ export default function WishlistDetail() {
         </button>
       </header>
 
-      <div className={`detail-image-container glass-panel${isImageExpanded ? ' is-expanded' : ''}`}>
-        {url ? (
-          // Screenshots are often tall, and their text is unreadable at the default height.
-          <button
-            type="button"
-            className="detail-image-toggle"
-            aria-pressed={isImageExpanded}
-            aria-label={t('expandImage')}
-            onClick={() => setIsImageExpanded(expanded => !expanded)}
-          >
-            <img src={url} alt={title} />
-          </button>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-icon glass-panel">
-              <ImageOff size={48} color="var(--text-muted)" />
-            </div>
-            <h2>{t('noPhoto')}</h2>
-          </div>
-        )}
-      </div>
+      {/* Screenshots are often tall, and their text is unreadable at the default height. */}
+      <PhotoGallery photos={photos} alt={title} expandable />
 
       <div className="detail-info glass-panel">
         <div className="detail-header">

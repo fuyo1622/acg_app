@@ -1,42 +1,7 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-
-// A valid 1×1 PNG: small enough to skip compression, real enough for backup validation.
-const PNG_BYTES = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-  'base64',
-);
-const png = name => ({ name, mimeType: 'image/png', buffer: PNG_BYTES });
-
-// Playwright gives every WebKit test a temporary, private-browsing-like profile, and WebKit
-// does not store Blobs in IndexedDB there, on any platform. Safari's normal profiles do, so
-// tests that save photos run WebKit with a profile on disk. It lives in a short temporary
-// folder: WebKit nests its IndexedDB files deeply, and below the test output folder they
-// would pass the Windows path limit and fail to open.
-const photoTest = test.extend({
-  page: async ({ page, browserName, playwright, baseURL, viewport, userAgent, deviceScaleFactor }, use) => {
-    if (browserName !== 'webkit') {
-      await use(page);
-      return;
-    }
-
-    const profileDir = await mkdtemp(join(tmpdir(), 'acg-webkit-'));
-    const context = await playwright.webkit.launchPersistentContext(profileDir, {
-      baseURL,
-      viewport,
-      userAgent,
-      deviceScaleFactor,
-    });
-    await use(context.pages()[0] ?? await context.newPage());
-    await context.close();
-    // On Windows, WebKit can hold its database files for a moment after closing. A
-    // leftover folder in the system temp directory is harmless, so cleanup never fails a test.
-    await rm(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => {});
-  },
-});
+import { PNG_BASE64, photoTest, png } from './fixtures';
 
 async function useEnglish(page) {
   await page.goto('/');
@@ -93,16 +58,25 @@ photoTest('keeps a wishlist entry with a photo and links out of the collection',
   await expect(page.getByRole('link', { name: /Asuka 1\/7 scale figure/ })).toHaveCount(0);
 });
 
-photoTest('adds one wishlist entry per chosen screenshot', async ({ page }) => {
+photoTest('imports album photos as wishlist entries, merging the photos of one item', async ({ page }) => {
   await useEnglish(page);
   await openWishlist(page);
 
-  await page.getByLabel('Choose screenshots').setInputFiles([png('first.png'), png('second.png')]);
-  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('Added 2 entries');
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByLabel('Album photos').setInputFiles([png('front.png'), png('back.png'), png('other.png')]);
+  await expect(page.getByRole('heading', { name: 'Import album' })).toBeVisible();
+  await page.getByRole('button', { name: 'Item 1: 1 photo(s)' }).click();
+  await page.getByRole('button', { name: 'Item 2: 1 photo(s)' }).click();
+  await page.getByRole('button', { name: 'Merge' }).click();
+  await page.getByRole('button', { name: 'Add all (2)' }).click();
 
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('Added 2 item(s)');
+  await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('heading', { name: 'Untitled' })).toHaveCount(2);
   await expect(page.getByRole('img', { name: 'Untitled' })).toHaveCount(2);
+  await expect(page.getByRole('img', { name: '2 photos' })).toBeVisible();
+
+  await page.getByRole('link', { name: /Untitled/ }).first().click();
+  await expect(page.getByRole('button', { name: 'Show photo 2' })).toBeVisible();
 });
 
 photoTest('moves an arrived entry into the collection with its wishlist photo', async ({ page }) => {
@@ -122,7 +96,7 @@ photoTest('moves an arrived entry into the collection with its wishlist photo', 
   await expect(page.getByRole('img', { name: 'Wishlist photo' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip and use the wishlist photo' }).click();
 
-  // The collection needs a series or character and a type, which this entry lacks.
+  // Without a series or character and a type, the item would be marked Needs details.
   await page.getByRole('combobox', { name: 'Series / Franchise' }).fill('Evangelion');
   await page.getByRole('option', { name: 'Add "Evangelion"' }).click();
   await page.getByLabel('Merchandise Type').selectOption('figure');
@@ -150,7 +124,7 @@ test('restores the wishlist from the shared backup file', async ({ page }) => {
   ]).then(([download]) => download);
   const exportedPath = await exported.path();
   const backup = JSON.parse(await readFile(exportedPath, 'utf8'));
-  expect(backup.version).toBe(3);
+  expect(backup.version).toBe(4);
   expect(backup.wishlist).toEqual([expect.objectContaining({ name: 'Rei plush', status: 'want' })]);
 
   await page.getByRole('link', { name: /Rei plush/ }).click();
@@ -285,13 +259,96 @@ test('upgrades an existing version 2 database and keeps its collection', async (
     };
     request.onerror = () => reject(request.error);
   }));
-  expect(schema).toEqual({ version: 30, stores: ['items', 'wishlist'] });
+  expect(schema).toEqual({ version: 40, stores: ['items', 'wishlist'] });
 
   await openWishlist(page);
   await addWishlistEntry(page, 'Shinji badge');
   await page.getByRole('link', { name: 'Collection', exact: true }).click();
   await page.getByRole('link', { name: /Asuka Langley/ }).click();
   await expect(page.getByText('Saved before the wishlist existed')).toBeVisible();
+});
+
+photoTest('upgrades a version 3 database and keeps each photo as the first of its photos', async ({ page }) => {
+  await page.route('**/seed-version-3', route => route.fulfill({
+    contentType: 'text/html',
+    body: '<!doctype html><title>Seed</title>',
+  }));
+  await page.goto('/seed-version-3');
+  await page.evaluate(base64 => new Promise((resolve, reject) => {
+    const photo = new Blob([Uint8Array.from(atob(base64), character => character.charCodeAt(0))], { type: 'image/png' });
+    // Dexie stores schema version 3 as IndexedDB version 30.
+    const request = indexedDB.open('acg-merch-db', 30);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      const items = database.createObjectStore('items', { keyPath: 'id', autoIncrement: true });
+      ['series', 'character'].forEach(name => items.createIndex(name, name, { multiEntry: true }));
+      ['merchandise_type', 'created_at', 'updated_at'].forEach(name => items.createIndex(name, name));
+      const wishlist = database.createObjectStore('wishlist', { keyPath: 'id', autoIncrement: true });
+      ['status', 'created_at', 'updated_at'].forEach(name => wishlist.createIndex(name, name));
+
+      const now = new Date();
+      items.add({
+        series: ['Evangelion'],
+        character: ['Asuka Langley'],
+        merchandise_type: 'figure',
+        notes: '',
+        photo,
+        created_at: now,
+        updated_at: now,
+      });
+      wishlist.add({
+        name: 'Rei plush',
+        series: [],
+        character: [],
+        merchandise_type: '',
+        links: [],
+        price: null,
+        currency: 'TWD',
+        shop: '',
+        order_deadline: null,
+        release: '',
+        priority: 'medium',
+        status: 'want',
+        notes: '',
+        photo,
+        created_at: now,
+        updated_at: now,
+      });
+    };
+    request.onsuccess = () => {
+      request.result.close();
+      resolve();
+    };
+    request.onerror = () => reject(request.error);
+  }), PNG_BASE64);
+
+  await useEnglish(page);
+  await expect(page.getByRole('img', { name: 'Asuka Langley' })).toBeVisible();
+
+  const stored = await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-merch-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction(['items', 'wishlist']);
+      const records = {};
+      transaction.objectStore('items').getAll().onsuccess = event => { [records.item] = event.target.result; };
+      transaction.objectStore('wishlist').getAll().onsuccess = event => { [records.entry] = event.target.result; };
+      transaction.oncomplete = () => {
+        const describe = record => ({ hasPhoto: 'photo' in record, photos: record.photos.map(blob => blob.type) });
+        resolve({ version: database.version, item: describe(records.item), entry: describe(records.entry) });
+        database.close();
+      };
+    };
+    request.onerror = () => reject(request.error);
+  }));
+  expect(stored).toEqual({
+    version: 40,
+    item: { hasPhoto: false, photos: ['image/png'] },
+    entry: { hasPhoto: false, photos: ['image/png'] },
+  });
+
+  await openWishlist(page);
+  await expect(page.getByRole('img', { name: 'Rei plush' })).toBeVisible();
 });
 
 test('has no serious automated accessibility violations on wishlist screens', async ({ page }) => {

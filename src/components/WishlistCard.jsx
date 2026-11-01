@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
+import { Images } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import { WISHLIST_STATUS_LABELS } from '../utils/constants';
+import { getCoverPhoto, getPhotos } from '../utils/photoUtils';
 import {
   formatDateKey,
   formatPrice,
@@ -12,7 +14,9 @@ import {
 
 export default function WishlistCard({ entry }) {
   const { t, lang } = useLanguage();
-  const imageUrl = useObjectUrl(entry.photo);
+  const cover = getCoverPhoto(entry);
+  const imageUrl = useObjectUrl(cover);
+  const photoCount = getPhotos(entry).length;
   const separator = lang === 'en' ? ', ' : '、';
   const title = getWishlistTitle(entry, separator) || t('untitledEntry');
   const subtitle = getWishlistSubtitle(entry, separator);
@@ -31,7 +35,7 @@ export default function WishlistCard({ entry }) {
       className="item-card wishlist-card glass-panel"
     >
       <div className="image-container">
-        {entry.photo ? (
+        {cover ? (
           <img src={imageUrl} alt={title} loading="lazy" />
         ) : (
           <div className="no-image">{t('noPhoto')}</div>
@@ -40,6 +44,12 @@ export default function WishlistCard({ entry }) {
           <div className="item-badge wishlist-priority-badge">{t('highPriority')}</div>
         )}
         <div className="item-badge">{t(WISHLIST_STATUS_LABELS[entry.status] ?? 'statusWant')}</div>
+        {photoCount > 1 && (
+          <div className="photo-count-badge" role="img" aria-label={t('photoCount', { count: photoCount })}>
+            <Images size={14} aria-hidden="true" />
+            {photoCount}
+          </div>
+        )}
       </div>
       <div className="item-info">
         <h3>{title}</h3>

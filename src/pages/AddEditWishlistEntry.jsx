@@ -4,9 +4,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { db } from '../services/db';
 import AppDialog from '../components/AppDialog';
-import ImageUploader from '../components/ImageUploader';
 import LinkListEditor from '../components/LinkListEditor';
 import MultiSelectCombobox from '../components/MultiSelectCombobox';
+import PhotoListEditor from '../components/PhotoListEditor';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
   BACKUP_LIMITS,
@@ -19,7 +19,7 @@ import {
   WISHLIST_STATUS_LABELS,
 } from '../utils/constants';
 import { getUniqueValues } from '../utils/filterUtils';
-import { compressImage } from '../utils/imageUtils';
+import { getPhotos, preparePhotosForSaving } from '../utils/photoUtils';
 import { isSameValue, toValueArray } from '../utils/valueUtils';
 import {
   createLinkRow,
@@ -55,7 +55,7 @@ export default function AddEditWishlistEntry() {
 
   const [formData, setFormData] = useState(emptyForm);
   const [linkRows, setLinkRows] = useState(() => [createLinkRow()]);
-  const [photo, setPhoto] = useState(null);
+  const [photos, setPhotos] = useState([]);
   const [customType, setCustomType] = useState('');
   const [loading, setLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
@@ -124,7 +124,7 @@ export default function AddEditWishlistEntry() {
       notes: entry.notes || '',
     });
     setLinkRows(entry.links?.length ? entry.links.map(link => createLinkRow(link)) : [createLinkRow()]);
-    setPhoto(entry.photo ?? null);
+    setPhotos(getPhotos(entry));
     isFormInitialized.current = true;
     setLoading(false);
   }, [isEditing, loadedEntry, suggestionsLoaded, uniqueCustomTypes, navigate]);
@@ -149,7 +149,7 @@ export default function AddEditWishlistEntry() {
       ...formData,
       merchandise_type: merchandiseType,
       links: linkRows,
-      photo,
+      photos,
     });
 
     if (errorKey) {
@@ -159,8 +159,7 @@ export default function AddEditWishlistEntry() {
 
     setIsSaving(true);
     try {
-      const processedPhoto = photo instanceof File ? await compressImage(photo) : photo;
-      const entryData = { ...entry, photo: processedPhoto, updated_at: new Date() };
+      const entryData = { ...entry, photos: await preparePhotosForSaving(photos), updated_at: new Date() };
 
       // Writing inside an explicit transaction avoids a Dexie 4.4 live-query cache bug: a
       // failed auto-keyed add outside one makes the next wishlist query throw on render.
@@ -224,7 +223,7 @@ export default function AddEditWishlistEntry() {
       </header>
 
       <form onSubmit={handleSubmit} className="item-form">
-        <ImageUploader defaultImage={photo} onImageSelected={setPhoto} />
+        <PhotoListEditor photos={photos} onChange={setPhotos} />
         <p className="form-hint">{t('wishlistFormHint')}</p>
 
         <div className="form-group">

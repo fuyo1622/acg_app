@@ -68,4 +68,22 @@ describe('ItemCard', () => {
     expect(image).toHaveAttribute('src', 'blob:card');
     expect(image).toHaveAttribute('loading', 'lazy');
   });
+
+  it('marks an item that needs details and hides an empty type', () => {
+    renderCard({ id: 5, series: [], character: [], merchandise_type: '', photos: [] });
+
+    expect(screen.getByText('Needs details')).toBeInTheDocument();
+    expect(screen.queryByText('Figure/Statue')).not.toBeInTheDocument();
+    expect(screen.getByRole('link').querySelectorAll('.item-badge')).toHaveLength(1);
+  });
+
+  it('shows the cover photo and how many photos the item has', () => {
+    const photos = [new Blob(['front'], { type: 'image/png' }), new Blob(['back'], { type: 'image/png' })];
+    renderCard({ id: 6, series: ['Evangelion'], character: ['Asuka'], merchandise_type: 'figure', photos });
+
+    expect(screen.getByRole('img', { name: 'Asuka' })).toHaveAttribute('src', 'blob:card');
+    expect(URL.createObjectURL).toHaveBeenCalledWith(photos[0]);
+    expect(screen.getByRole('img', { name: '2 photos' })).toHaveTextContent('2');
+    expect(screen.queryByText('Needs details')).not.toBeInTheDocument();
+  });
 });

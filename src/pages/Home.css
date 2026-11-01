@@ -320,6 +320,66 @@
   text-transform: capitalize;
 }
 
+.needs-details-badge {
+  left: 0.5rem;
+  right: auto;
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.photo-count-badge {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* The album import button and its hint above both lists. */
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.list-toolbar .btn {
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+}
+
+.list-toolbar p {
+  flex: 1 1 16rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.needs-details-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.9rem;
+  border-color: rgba(251, 191, 36, 0.5);
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.needs-details-banner .btn {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+}
+
 .item-info {
   padding: 0.75rem;
 }
