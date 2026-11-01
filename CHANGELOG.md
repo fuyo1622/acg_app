@@ -6,6 +6,8 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-01
+
 ### Added
 
 - Import album, in both the collection and the wishlist: choose up to 100 photos, in one
