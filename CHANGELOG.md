@@ -18,6 +18,14 @@ for published releases.
 - The browser storage panel can be hidden to save space on small screens and shown again
   from a storage button in the header. It always shows when storage is nearly full.
 
+### Changed
+
+- Updated app libraries: React 19.3, React Router 7.18.4, Dexie 4.4.6, dexie-react-hooks 4.4,
+  and lucide-react 1.52.
+- Updated test tools: Playwright 1.63, axe 4.13, and Testing Library 16.3.3.
+- GitHub Actions now use checkout v7 and setup-node v7, because the v4 versions target a
+  deprecated Node.js release.
+
 ## [0.4.0] - 2026-10-08
 
 ### Added
