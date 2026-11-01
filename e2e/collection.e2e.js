@@ -1,7 +1,6 @@
-import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { photoTest, png, solidPng } from './fixtures';
+import { photoTest, png, readBackupArchive, solidPng } from './fixtures';
 
 async function useEnglish(page) {
   await page.goto('/');
@@ -174,7 +173,7 @@ test('exports, imports and creates a pre-replacement safety backup', async ({ pa
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Export Backup' }).click(),
   ]).then(([download]) => download);
-  expect(exported.suggestedFilename()).toMatch(/^acg-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(exported.suggestedFilename()).toMatch(/^acg-backup-\d{4}-\d{2}-\d{2}\.zip$/);
   const exportedPath = await exported.path();
 
   await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
@@ -186,7 +185,7 @@ test('exports, imports and creates a pre-replacement safety backup', async ({ pa
     page.getByRole('button', { name: 'Continue' }).click(),
   ]).then(([download]) => download);
   expect(safetyBackup.suggestedFilename())
-    .toMatch(/^acg-auto-backup-before-import-\d{4}-\d{2}-\d{2}\.json$/);
+    .toMatch(/^acg-auto-backup-before-import-\d{4}-\d{2}-\d{2}\.zip$/);
 
   await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully');
   await page.getByRole('button', { name: 'Close' }).click();
@@ -247,6 +246,101 @@ photoTest('imports album photos as unfinished items and fills one in later', asy
   await expect.poll(() => shelfPhoto.evaluate(image => image.naturalWidth)).toBe(640);
 });
 
+// Stored photos larger than any album import makes, so six of them pass the 50 MB that
+// backups were once limited to.
+async function seedLargePhotos(page, { count, bytes }) {
+  await page.evaluate(({ count, bytes }) => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-merch-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('items', 'readwrite');
+      for (let index = 0; index < count; index += 1) {
+        const data = new Uint8Array(bytes);
+        data.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+        for (let offset = 8; offset < bytes; offset += 65536) {
+          crypto.getRandomValues(data.subarray(offset, Math.min(offset + 65536, bytes)));
+        }
+        const now = new Date(Date.now() - index);
+        transaction.objectStore('items').add({
+          series: ['Large'],
+          character: [`Large ${index + 1}`],
+          merchandise_type: 'figure',
+          notes: '',
+          photos: [new Blob([data], { type: 'image/png' })],
+          created_at: now,
+          updated_at: now,
+        });
+      }
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    };
+    request.onerror = () => reject(request.error);
+  }), { count, bytes });
+}
+
+function storedPhotoSizes(page) {
+  return page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-merch-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      database.transaction('items').objectStore('items').getAll().onsuccess = event => {
+        resolve(event.target.result.map(item => item.photos.map(photo => photo.size)).flat());
+        database.close();
+      };
+    };
+    request.onerror = () => reject(request.error);
+  }));
+}
+
+photoTest('backs up and restores a collection larger than the old 50 MB limit', async ({ page }) => {
+  photoTest.slow(true, 'The test writes, saves, and restores about 54 MB of photos');
+  await useEnglish(page);
+  const photoBytes = 9 * 1024 * 1024;
+  await seedLargePhotos(page, { count: 6, bytes: photoBytes });
+  await page.reload();
+  await expect(page.getByRole('link', { name: /Large \d/ })).toHaveCount(6);
+
+  const exported = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export Backup' }).click(),
+  ]).then(([download]) => download);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const exportedPath = await exported.path();
+  const { archive, backup } = await readBackupArchive(exportedPath);
+  expect(backup.items).toHaveLength(6);
+  expect(archive.size('photos/items/0006-1.png')).toBe(photoBytes);
+
+  // As if the browser lost the data: the backup file is all that is left.
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-merch-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('items', 'readwrite');
+      transaction.objectStore('items').clear();
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    };
+    request.onerror = () => reject(request.error);
+  }));
+  await page.reload();
+  await expect(page.getByText('No items found')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(exportedPath);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await expect(page.getByRole('link', { name: /Large \d/ })).toHaveCount(6);
+  expect(await storedPhotoSizes(page)).toEqual(Array(6).fill(photoBytes));
+});
+
 photoTest('keeps every photo of an item through a backup and restore', async ({ page }) => {
   await useEnglish(page);
   await page.getByRole('button', { name: 'Add Item' }).click();
@@ -263,13 +357,14 @@ photoTest('keeps every photo of an item through a backup and restore', async ({ 
     page.getByRole('button', { name: 'Export Backup' }).click(),
   ]).then(([download]) => download);
   const exportedPath = await exported.path();
-  const backup = JSON.parse(await readFile(exportedPath, 'utf8'));
-  expect(backup.version).toBe(4);
+  const { archive, backup } = await readBackupArchive(exportedPath);
+  expect(backup.version).toBe(5);
   expect(backup.items).toEqual([expect.objectContaining({
     character: ['Asuka Langley'],
-    photos: [expect.stringMatching(/^data:image\/png;base64,/), expect.stringMatching(/^data:image\/png;base64,/)],
+    photos: ['photos/items/0001-1.png', 'photos/items/0001-2.png'],
   })]);
   expect(backup.items[0]).not.toHaveProperty('photo');
+  expect(archive.size('photos/items/0001-2.png')).toBeGreaterThan(0);
 
   await page.getByRole('link', { name: /Asuka Langley/ }).click();
   await page.getByRole('button', { name: 'Edit Item' }).click();

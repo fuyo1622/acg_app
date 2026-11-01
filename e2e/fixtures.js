@@ -1,8 +1,16 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { test } from '@playwright/test';
+import { readZip } from '../src/utils/zipUtils.js';
+
+// Opens a downloaded backup archive: its records from backup.json, and the archive to
+// check the photo files in it.
+export async function readBackupArchive(path) {
+  const archive = await readZip(new Blob([await readFile(path)]));
+  return { archive, backup: JSON.parse(await archive.text('backup.json')) };
+}
 
 // A valid 1×1 PNG: small enough to skip compression, real enough for backup validation.
 export const PNG_BASE64 =

@@ -13,18 +13,13 @@ import {
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
 import AppDialog from './AppDialog';
-import { BACKUP_LIMITS, BACKUP_VERSION } from '../utils/constants';
+import { BACKUP_VERSION } from '../utils/constants';
 import {
-  buildBackupPayload,
-  estimateBackupBytes,
-  exceedsBackupSizeLimit,
+  createBackupArchive,
   hasWishlistSection,
-  parseBackupText,
+  readBackupFile,
   rehydrateBackup,
   replaceBackupInDb,
-  serializeBackupItems,
-  serializeWishlistEntries,
-  validateBackupFile,
   validateBackupPayload,
 } from '../utils/backupUtils';
 import {
@@ -34,15 +29,46 @@ import {
   requestPersistentStorage,
 } from '../utils/storageUtils';
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
+// The URL stays valid for a minute: Safari reads a download after the click returns, and a
+// URL revoked at once can leave it with nothing to save.
+function downloadFile(file) {
+  const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename;
+  link.download = file.name;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function isAppleMobile() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// An iPhone or iPad does not reliably keep a file downloaded from a home-screen app, so
+// there a backup goes through the share sheet, where Save to Files keeps it.
+function canShareFile(file) {
+  if (!isAppleMobile() || typeof navigator.share !== 'function') return false;
+  try {
+    return typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+// Call it straight from a tap: the share sheet opens only for one. Where sharing this kind
+// of file is refused, the file downloads instead.
+async function shareFile(file) {
+  try {
+    await navigator.share({ files: [file] });
+    return 'shared';
+  } catch (error) {
+    if (error?.name === 'AbortError') return 'cancelled';
+    downloadFile(file);
+    return 'downloaded';
+  }
 }
 
 async function readBackupSections() {
@@ -50,16 +76,10 @@ async function readBackupSections() {
   return { items, wishlist };
 }
 
-async function createBackup({ items, wishlist }) {
-  const payload = buildBackupPayload({
-    items: await serializeBackupItems(items),
-    wishlist: await serializeWishlistEntries(wishlist),
-  }, BACKUP_VERSION);
-  return new Blob([JSON.stringify(payload)], { type: 'application/json' });
-}
-
-function backupFilename(prefix) {
-  return `${prefix}-${new Date().toISOString().slice(0, 10)}.json`;
+async function createBackupFile(sections, prefix) {
+  const archive = await createBackupArchive(sections);
+  const filename = `${prefix}-${new Date().toISOString().slice(0, 10)}.zip`;
+  return new File([archive], filename, { type: 'application/zip' });
 }
 
 const tabClassName = ({ isActive }) => `list-tab${isActive ? ' is-active' : ''}`;
@@ -90,7 +110,8 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [notice, setNotice] = useState(null);
   const [stagedImport, setStagedImport] = useState(null);
-  const [stagedExport, setStagedExport] = useState(null);
+  const [readyExport, setReadyExport] = useState(null);
+  const [unsavedSafetyImport, setUnsavedSafetyImport] = useState(null);
   const [storageStatus, setStorageStatus] = useState(null);
   const [storageHidden, setStorageHidden] = useState(readStoragePanelHidden);
   const fileInputRef = useRef(null);
@@ -116,28 +137,14 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     setNotice({ title: t('errorTitle'), message: t(messageKey) });
   };
 
-  const writeBackup = async (sections) => {
-    const blob = await createBackup(sections);
-    downloadBlob(blob, backupFilename('acg-backup'));
-  };
-
   const handleExport = async () => {
     setIsProcessing(true);
     try {
-      const sections = await readBackupSections();
-
-      // Warn rather than block: a backup this app could not re-import is still the
-      // user's only copy, so the decision belongs to them.
-      if (exceedsBackupSizeLimit(sections)) {
-        setStagedExport({
-          sections,
-          size: formatBytes(estimateBackupBytes(sections), storageLocale),
-          limit: formatBytes(BACKUP_LIMITS.maxFileBytes, storageLocale),
-        });
-        return;
-      }
-
-      await writeBackup(sections);
+      const file = await createBackupFile(await readBackupSections(), 'acg-backup');
+      // A large backup takes a while to prepare, and the share sheet needs a tap of its
+      // own, so it opens from the ready dialog.
+      if (canShareFile(file)) setReadyExport(file);
+      else downloadFile(file);
     } catch (error) {
       console.error(error);
       showError('exportError');
@@ -146,20 +153,10 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
-  const confirmExport = async () => {
-    const exportData = stagedExport;
-    setStagedExport(null);
-    if (!exportData) return;
-
-    setIsProcessing(true);
-    try {
-      await writeBackup(exportData.sections);
-    } catch (error) {
-      console.error(error);
-      showError('exportError');
-    } finally {
-      setIsProcessing(false);
-    }
+  const saveReadyExport = () => {
+    const file = readyExport;
+    setReadyExport(null);
+    if (file) shareFile(file);
   };
 
   const handleImport = async (event) => {
@@ -168,15 +165,14 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
 
     setIsProcessing(true);
     try {
-      validateBackupFile(file);
-      const payload = parseBackupText(await file.text());
-      validateBackupPayload(payload, BACKUP_VERSION);
+      const { payload, archive } = await readBackupFile(file);
+      validateBackupPayload(payload, BACKUP_VERSION, archive);
 
       const current = await readBackupSections();
       const safetyBackup = current.items.length > 0 || current.wishlist.length > 0
-        ? await createBackup(current)
+        ? await createBackupFile(current, 'acg-auto-backup-before-import')
         : null;
-      setStagedImport({ payload, safetyBackup });
+      setStagedImport({ payload, archive, safetyBackup });
     } catch (error) {
       console.error(error);
       showError('importError');
@@ -186,21 +182,10 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
-  const confirmImport = async () => {
-    const importData = stagedImport;
-    setStagedImport(null);
-    if (!importData) return;
-
-    if (importData.safetyBackup) {
-      downloadBlob(
-        importData.safetyBackup,
-        backupFilename('acg-auto-backup-before-import'),
-      );
-    }
-
+  const runImport = async ({ payload, archive }) => {
     setIsProcessing(true);
     try {
-      await replaceBackupInDb(db, await rehydrateBackup(importData.payload));
+      await replaceBackupInDb(db, await rehydrateBackup(payload, archive));
       setNotice({ title: t('successTitle'), message: t('importSuccess') });
       setStorageStatus(await getStorageStatus());
     } catch (error) {
@@ -209,6 +194,31 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const confirmImport = async () => {
+    const importData = stagedImport;
+    setStagedImport(null);
+    if (!importData) return;
+
+    const { safetyBackup } = importData;
+    if (safetyBackup && canShareFile(safetyBackup)) {
+      // The current data is replaced only once its safety backup is kept, or once the
+      // user says to go on without it.
+      if (await shareFile(safetyBackup) === 'cancelled') {
+        setUnsavedSafetyImport(importData);
+        return;
+      }
+    } else if (safetyBackup) {
+      downloadFile(safetyBackup);
+    }
+    await runImport(importData);
+  };
+
+  const replaceWithoutSafetyBackup = () => {
+    const importData = unsavedSafetyImport;
+    setUnsavedSafetyImport(null);
+    if (importData) runImport(importData);
   };
 
   const handlePersistentStorage = async () => {
@@ -290,7 +300,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
             </button>
             <input
               type="file"
-              accept="application/json,.json"
+              accept="application/zip,.zip,application/json,.json"
               aria-label={t('importFile')}
               className="sr-only"
               ref={fileInputRef}
@@ -376,16 +386,25 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         destructive
       />
       <AppDialog
-        open={Boolean(stagedExport)}
-        title={t('exportLargeTitle')}
-        message={t('exportLargeMessage', {
-          size: stagedExport?.size ?? '',
-          limit: stagedExport?.limit ?? '',
-        })}
-        confirmLabel={t('continue')}
+        open={Boolean(unsavedSafetyImport)}
+        title={t('safetyBackupUnsavedTitle')}
+        message={t('safetyBackupUnsavedMessage')}
+        confirmLabel={t('replaceAnyway')}
         cancelLabel={t('cancel')}
-        onConfirm={confirmExport}
-        onCancel={() => setStagedExport(null)}
+        onConfirm={replaceWithoutSafetyBackup}
+        onCancel={() => setUnsavedSafetyImport(null)}
+        destructive
+      />
+      <AppDialog
+        open={Boolean(readyExport)}
+        title={t('exportReadyTitle')}
+        message={t('exportReadyMessage', {
+          size: readyExport ? formatBytes(readyExport.size, storageLocale) : '',
+        })}
+        confirmLabel={t('saveBackup')}
+        cancelLabel={t('cancel')}
+        onConfirm={saveReadyExport}
+        onCancel={() => setReadyExport(null)}
       />
       <AppDialog
         open={Boolean(notice)}

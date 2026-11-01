@@ -8,13 +8,17 @@ export const DEFAULT_TYPES = [
   'other'
 ];
 
-// Version 3 added the wishlist section and version 4 several photos per record. Older
-// backups contain only the collection, and at most one photo per record.
-export const BACKUP_VERSION = 4;
+// Version 3 added the wishlist section, version 4 several photos per record, and version 5
+// made a backup a ZIP archive with the photos as image files. Older backups are JSON files,
+// contain only the collection before version 3, and at most one photo per record before 4.
+export const BACKUP_VERSION = 5;
 export const WISHLIST_BACKUP_VERSION = 3;
 
 export const BACKUP_LIMITS = Object.freeze({
-  maxFileBytes: 50 * 1024 * 1024,
+  // A JSON backup from before version 5 is read into memory whole, an archive is not.
+  maxFileBytes: 200 * 1024 * 1024,
+  maxArchiveBytes: 2 * 1024 * 1024 * 1024,
+  maxDataBytes: 50 * 1024 * 1024,
   maxItems: 2000,
   maxValuesPerField: 50,
   maxValueLength: 200,
