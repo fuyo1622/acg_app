@@ -1,12 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
 import { takeAlbumFiles } from '../utils/albumHandoff';
 import { replaceBackupInDb } from '../utils/backupUtils';
 import { APP_RELEASE_URL, APP_VERSION } from '../utils/version';
+import { readZip } from '../utils/zipUtils';
 import Home from './Home';
 
 const dbMocks = vi.hoisted(() => ({
@@ -78,15 +79,6 @@ function collectionItem(id, photoBytes) {
   };
 }
 
-function readBlobText(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsText(blob);
-  });
-}
-
 function wishlistEntry(id, name) {
   return {
     id,
@@ -119,11 +111,6 @@ function stubStorageManager({ usage = 100, quota = 1000 } = {}) {
       persist: vi.fn().mockResolvedValue(false),
     },
   });
-}
-
-// Each photo stays under the per-photo limit; together they pass the 50 MiB file limit.
-function oversizedCollection() {
-  return Array.from({ length: 8 }, (_, index) => collectionItem(index + 1, 8 * 1024 * 1024));
 }
 
 describe('Home smoke flows', () => {
@@ -229,7 +216,7 @@ describe('Home smoke flows', () => {
     const importInput = screen.getByLabelText('Import backup file');
     const clickSpy = vi.spyOn(importInput, 'click').mockImplementation(() => {});
 
-    expect(importInput).toHaveAttribute('accept', 'application/json,.json');
+    expect(importInput).toHaveAttribute('accept', 'application/zip,.zip,application/json,.json');
     fireEvent.click(importButton);
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
@@ -370,11 +357,11 @@ describe('Home smoke flows', () => {
     await waitFor(() => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
-    const [backupBlob] = vi.mocked(URL.createObjectURL).mock.calls
+    const [backupFile] = vi.mocked(URL.createObjectURL).mock.calls
       .map(([blob]) => blob)
-      .filter(blob => blob.type === 'application/json');
-    const exported = JSON.parse(await readBlobText(backupBlob));
-    expect(exported.version).toBe(4);
+      .filter(blob => blob.type === 'application/zip');
+    const exported = JSON.parse(await (await readZip(backupFile)).text('backup.json'));
+    expect(exported.version).toBe(5);
     expect(exported.items).toEqual([expect.objectContaining({ id: 1, photos: [] })]);
     expect(exported.items[0]).not.toHaveProperty('photo');
     expect(exported.wishlist).toEqual([expect.objectContaining({ id: 5, name: 'Rei plush', photos: [] })]);
@@ -416,6 +403,30 @@ describe('Home smoke flows', () => {
     expect(itemLinks()).toHaveLength(2);
   });
 
+  it('opens an item with the order of the list as filtered, for moving between items', () => {
+    const unfinished = id => ({ ...collectionItem(id, 0), series: [], character: [], merchandise_type: '' });
+    vi.mocked(useLiveQuery).mockReturnValue([collectionItem(1, 0), unfinished(2), unfinished(3)]);
+    function ItemPage() {
+      const location = useLocation();
+      return <p>Order: {location.state?.order.join(', ')}</p>;
+    }
+    render(
+      <LanguageProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/item/:id" element={<ItemPage />} />
+          </Routes>
+        </MemoryRouter>
+      </LanguageProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show only these' }));
+    fireEvent.click(screen.getAllByRole('link').find(link => link.getAttribute('href') === '/item/3'));
+
+    expect(screen.getByText('Order: 2, 3')).toBeInTheDocument();
+  });
+
   it('says how many items an album import added', () => {
     render(
       <LanguageProvider>
@@ -436,26 +447,7 @@ describe('Home smoke flows', () => {
     expect(within(tabs).getByRole('link', { name: 'Collection' })).toHaveAttribute('aria-current', 'page');
     expect(within(tabs).getByRole('link', { name: 'Wishlist' })).toHaveAttribute('href', '/wishlist');
   });
-  it('warns before exporting a backup that exceeds the import limit', async () => {
-    const items = oversizedCollection();
-    dbMocks.items.toArray.mockResolvedValue(items);
-    vi.mocked(useLiveQuery).mockReturnValue(items);
-    renderHome();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
-
-    const warning = await screen.findByRole('dialog', { name: 'Large backup' });
-    expect(warning).toHaveTextContent('larger than the import limit');
-    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => {
-      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
-    });
-  });
-
-  it('exports a collection within the limit without a warning', async () => {
+  it('downloads the backup as a dated ZIP file and keeps its address alive for the download', async () => {
     const items = [collectionItem(1, 0)];
     dbMocks.items.toArray.mockResolvedValue(items);
     vi.mocked(useLiveQuery).mockReturnValue(items);
@@ -466,7 +458,122 @@ describe('Home smoke flows', () => {
     await waitFor(() => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
-    expect(screen.queryByRole('dialog', { name: 'Large backup' })).not.toBeInTheDocument();
+    const link = vi.mocked(HTMLAnchorElement.prototype.click).mock.contexts[0];
+    expect(link.download).toMatch(/^acg-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+    // Safari reads the file after the click returns, so the address is not revoked at once.
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('says that it is working while a backup is prepared', async () => {
+    let finishReading;
+    dbMocks.items.toArray.mockReturnValue(new Promise(resolve => { finishReading = resolve; }));
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+    expect(await screen.findByText('Working on the backup… Large ones take a while.')).toBeInTheDocument();
+    finishReading([collectionItem(1, 0)]);
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/Working on the backup/)).not.toBeInTheDocument();
+  });
+
+  describe('on an iPhone', () => {
+    beforeEach(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+      });
+      navigator.share = vi.fn().mockResolvedValue(undefined);
+      navigator.canShare = vi.fn(() => true);
+    });
+
+    afterEach(() => {
+      delete navigator.userAgent;
+      delete navigator.share;
+      delete navigator.canShare;
+    });
+
+    it('saves the backup through the share sheet, opened by a tap once the file is ready', async () => {
+      dbMocks.items.toArray.mockResolvedValue([collectionItem(1, 0)]);
+      renderHome();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+      const ready = await screen.findByRole('dialog', { name: 'Backup ready' });
+      expect(ready).toHaveTextContent('Save to Files');
+      expect(ready).toHaveTextContent(/acg-backup-\d{4}-\d{2}-\d{2}\.zip/);
+      expect(navigator.share).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(navigator.share).toHaveBeenCalledWith({ files: [expect.any(File)] });
+      const [{ files: [file] }] = navigator.share.mock.calls[0];
+      expect(file.name).toMatch(/^acg-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+      const archive = await readZip(file);
+      expect(JSON.parse(await archive.text('backup.json')).items).toEqual([expect.objectContaining({ id: 1 })]);
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+
+      // The share sheet picks the folder, so the app says how to find the file afterwards.
+      const found = await screen.findByRole('dialog', { name: 'Where to find the backup' });
+      expect(found).toHaveTextContent('Recents');
+      expect(found).toHaveTextContent(file.name);
+    });
+
+    it('says nothing more when the share sheet is closed without saving', async () => {
+      navigator.share.mockRejectedValue(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+      renderHome();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        expect(navigator.share).toHaveBeenCalled();
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+    });
+
+    it('downloads the backup when the share sheet refuses the file', async () => {
+      navigator.share.mockRejectedValue(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
+      renderHome();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+      });
+      expect(await screen.findByRole('dialog', { name: 'Where to find the backup' }))
+        .toHaveTextContent('Downloads folder');
+    });
+
+    it('asks before replacing data when the safety backup was not saved', async () => {
+      navigator.share.mockRejectedValue(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+      dbMocks.items.toArray.mockResolvedValue([collectionItem(1, 0)]);
+      renderHome();
+
+      const importFile = new File([JSON.stringify({ version: 2, items: [] })], 'backup.json', { type: 'application/json' });
+      fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [importFile] } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+      const unsaved = await screen.findByRole('alertdialog', { name: 'Safety backup not saved' });
+      expect(unsaved).toHaveTextContent('Replace them with this backup anyway?');
+      expect(navigator.share).toHaveBeenCalledWith({ files: [expect.any(File)] });
+      expect(replaceBackupInDb).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(replaceBackupInDb).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [importFile] } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Replace anyway' }));
+
+      await waitFor(() => {
+        expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined });
+      });
+    });
   });
 
   it('clears a filter whose value no longer exists in the collection', async () => {

@@ -1,0 +1,65 @@
+.sibling-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.sibling-nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.sibling-nav-button:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.sibling-nav-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.sibling-nav-position {
+  min-width: 4.5em;
+  text-align: center;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* A record reached by swiping slides in from the side it came from. */
+.detail-slide-from-right {
+  animation: detail-slide-from-right 0.22s ease-out;
+}
+
+.detail-slide-from-left {
+  animation: detail-slide-from-left 0.22s ease-out;
+}
+
+@keyframes detail-slide-from-right {
+  from {
+    opacity: 0.3;
+    transform: translateX(32px);
+  }
+}
+
+@keyframes detail-slide-from-left {
+  from {
+    opacity: 0.3;
+    transform: translateX(-32px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-slide-from-right,
+  .detail-slide-from-left {
+    animation: none;
+  }
+}

@@ -86,6 +86,8 @@ export default function Home() {
     },
     [items, searchTerm, filterType, filterSeries, filterCharacter, getTypeLabel, onlyNeedingDetails],
   );
+  // The whole filtered list, not only this page, so swiping on an item page goes past it.
+  const itemOrder = useMemo(() => filteredItems.map(item => item.id), [filteredItems]);
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / COLLECTION_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, pageCount);
   const pageStart = (safeCurrentPage - 1) * COLLECTION_PAGE_SIZE;
@@ -193,7 +195,7 @@ export default function Home() {
               <p>{t('tryAdjusting')}</p>
             </div>
           ) : (
-            visibleItems.map(item => <ItemCard key={item.id} item={item} />)
+            visibleItems.map(item => <ItemCard key={item.id} item={item} order={itemOrder} />)
           )}
         </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { db } from '../services/db';
@@ -49,6 +49,7 @@ function emptyForm() {
 
 export default function AddEditWishlistEntry() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { t } = useLanguage();
   const isEditing = !!id;
@@ -64,6 +65,9 @@ export default function AddEditWishlistEntry() {
 
   const entryId = Number.parseInt(id, 10);
   const exitPath = isEditing ? `/wishlist/item/${id}` : '/wishlist';
+  // The entry page's list order, handed back so moving between entries still follows it.
+  const returnState = isEditing && Array.isArray(location.state?.order) ? { order: location.state.order } : null;
+  const leave = () => (returnState ? navigate(exitPath, { state: returnState }) : navigate(exitPath));
 
   // Suggestions come from both lists, so an entry can reuse the collection's spelling.
   const collectionItems = useLiveQuery(() => db.items.toArray());
@@ -175,7 +179,7 @@ export default function AddEditWishlistEntry() {
 
       // An explicit destination: /wishlist/edit/:id can be opened directly, where there
       // is no in-app history entry to go back to.
-      navigate(exitPath, { replace: true });
+      navigate(exitPath, returnState ? { replace: true, state: returnState } : { replace: true });
     } catch (error) {
       console.error('Error saving wishlist entry:', error);
       setNotice({ title: t('errorTitle'), message: t('saveError') });
@@ -206,7 +210,7 @@ export default function AddEditWishlistEntry() {
   return (
     <div className="form-page">
       <header className="page-header">
-        <button className="back-btn" onClick={() => navigate(exitPath)} aria-label={t('cancel')} disabled={isSaving}>
+        <button className="back-btn" onClick={leave} aria-label={t('cancel')} disabled={isSaving}>
           <ArrowLeft size={24} />
         </button>
         <h2>{isEditing ? t('editWishlistEntry') : t('newWishlistEntry')}</h2>
@@ -404,7 +408,7 @@ export default function AddEditWishlistEntry() {
         </div>
 
         <div className="form-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(exitPath)} disabled={isSaving}>
+          <button type="button" className="btn btn-secondary" onClick={leave} disabled={isSaving}>
             {t('cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={isSaving}>

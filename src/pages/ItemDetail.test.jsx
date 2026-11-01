@@ -13,6 +13,7 @@ const routerMocks = vi.hoisted(() => ({
 vi.mock('react-router-dom', () => ({
   useNavigate: () => routerMocks.navigate,
   useParams: () => routerMocks.params,
+  useLocation: () => routerMocks.location ?? { state: null },
 }));
 
 vi.mock('dexie-react-hooks', () => ({
@@ -27,6 +28,7 @@ describe('ItemDetail', () => {
   beforeEach(() => {
     localStorage.setItem('appLang', 'en');
     routerMocks.params = { id: '7' };
+    routerMocks.location = { state: null };
   });
 
   afterEach(() => {
@@ -111,5 +113,82 @@ describe('ItemDetail', () => {
     expect(screen.getByRole('button', { name: 'Show photo 2' })).toBeInTheDocument();
     expect(screen.queryByText(/Still missing/)).not.toBeInTheDocument();
     vi.unstubAllGlobals();
+  });
+  describe('moving between items', () => {
+    const asuka = {
+      id: 7,
+      series: ['Evangelion'],
+      character: ['Asuka'],
+      merchandise_type: 'figure',
+      photos: [],
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+    };
+
+    function renderItem() {
+      return render(
+        <LanguageProvider>
+          <ItemDetail />
+        </LanguageProvider>,
+      );
+    }
+
+    it('shows its place in the list it was opened from and moves to either side', () => {
+      routerMocks.location = { state: { order: [5, 7, 9] } };
+      vi.mocked(useLiveQuery).mockReturnValue(asuka);
+      renderItem();
+
+      expect(screen.getByRole('group', { name: 'Browse items' })).toHaveTextContent('2 of 3');
+      fireEvent.click(screen.getByRole('button', { name: 'Next item' }));
+      expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/9', { replace: true, state: { order: [5, 7, 9], from: 'right' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Previous item' }));
+      expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/5', { replace: true, state: { order: [5, 7, 9], from: 'left' } });
+    });
+
+    it('stops at the ends of the list', () => {
+      routerMocks.location = { state: { order: [7, 9] } };
+      vi.mocked(useLiveQuery).mockReturnValue(asuka);
+      renderItem();
+
+      expect(screen.getByRole('button', { name: 'Previous item' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Next item' })).toBeEnabled();
+    });
+
+    it('moves with a swipe and with the arrow keys', () => {
+      routerMocks.location = { state: { order: [5, 7, 9] } };
+      vi.mocked(useLiveQuery).mockReturnValue(asuka);
+      const { container } = renderItem();
+      const page = container.querySelector('.item-detail-page');
+
+      fireEvent.touchStart(page, { touches: [{ clientX: 300, clientY: 300 }] });
+      fireEvent.touchEnd(page, { changedTouches: [{ clientX: 150, clientY: 310 }] });
+      expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/9', expect.objectContaining({ replace: true }));
+
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/5', expect.objectContaining({ replace: true }));
+    });
+
+    it('follows the newest-first order when opened without a list', () => {
+      // The item query depends on the id alone; the order query on the passed order and the table.
+      vi.mocked(useLiveQuery).mockImplementation((_query, deps) => (deps.length === 2 ? [3, 7, 11] : asuka));
+      renderItem();
+
+      expect(screen.getByRole('group', { name: 'Browse items' })).toHaveTextContent('2 of 3');
+    });
+
+    it('hands the order to the edit page, so it survives an edit', () => {
+      routerMocks.location = { state: { order: [5, 7, 9] } };
+      vi.mocked(useLiveQuery).mockReturnValue(asuka);
+      renderItem();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Item' }));
+      expect(routerMocks.navigate).toHaveBeenCalledWith('/edit/7', { state: { order: [5, 7, 9] } });
+    });
+
+    it('offers no controls when there is no list to move through', () => {
+      vi.mocked(useLiveQuery).mockReturnValue(asuka);
+      renderItem();
+
+      expect(screen.queryByRole('group', { name: 'Browse items' })).not.toBeInTheDocument();
+    });
   });
 });
