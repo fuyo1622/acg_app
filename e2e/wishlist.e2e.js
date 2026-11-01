@@ -1,7 +1,7 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { PNG_BASE64, photoTest, png } from './fixtures';
+import { PNG_BASE64, photoTest, png, readBackupArchive } from './fixtures';
 
 async function useEnglish(page) {
   await page.goto('/');
@@ -123,8 +123,8 @@ test('restores the wishlist from the shared backup file', async ({ page }) => {
     page.getByRole('button', { name: 'Export Backup' }).click(),
   ]).then(([download]) => download);
   const exportedPath = await exported.path();
-  const backup = JSON.parse(await readFile(exportedPath, 'utf8'));
-  expect(backup.version).toBe(4);
+  const { backup } = await readBackupArchive(exportedPath);
+  expect(backup.version).toBe(5);
   expect(backup.wishlist).toEqual([expect.objectContaining({ name: 'Rei plush', status: 'want' })]);
 
   await page.getByRole('link', { name: /Rei plush/ }).click();
@@ -173,7 +173,7 @@ test('keeps the wishlist when a backup from before the wishlist is imported', as
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Continue' }).click(),
   ]).then(([download]) => download);
-  const safetyContents = JSON.parse(await readFile(await safetyBackup.path(), 'utf8'));
+  const { backup: safetyContents } = await readBackupArchive(await safetyBackup.path());
   expect(safetyContents.wishlist).toEqual([expect.objectContaining({ name: 'Rei plush' })]);
 
   await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully');

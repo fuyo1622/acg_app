@@ -7,14 +7,14 @@ const content = {
   'zh-TW': {
     title: '使用說明',
     back: '返回收藏',
-    intro: '收藏與願望清單會保存在目前裝置的瀏覽器。一般 App 更新不需要重新匯出或匯入 JSON。',
+    intro: '收藏與願望清單會保存在目前裝置的瀏覽器。一般 App 更新不需要重新匯出或匯入備份。',
     sections: [
       {
         title: '新增與管理收藏',
         items: [
           '點右下角「新增項目」，填寫作品系列或角色名稱，並選擇周邊類型；資料不齊也可以先儲存，項目會標成「待補資料」。',
           '每個項目最多可放 10 張照片，第一張是封面，按其他照片上的星號可改設封面；備註為選填。首頁可搜尋及依類型、系列或角色篩選。',
-          '「匯入相簿」可一次選擇最多 30 張照片：每張先各自成為一個項目，點選同一個商品的照片再按「合併」，第一張會成為封面。按「全部加入」後，新項目會標成「待補資料」。',
+          '「匯入相簿」一次最多可匯入 100 張照片，也能按「加入照片」分好幾次、從不同相簿挑。每張先各自成為一個項目，點選同一個商品的照片再按「合併」，第一張會成為封面。按「全部加入」後，新項目會標成「待補資料」。',
           '首頁的「待補資料」列可只顯示還沒填完的項目；點開項目再按「補上資料」即可補齊。',
           '點收藏卡片可查看內容，再使用編輯按鈕修改或刪除。',
         ],
@@ -23,28 +23,32 @@ const content = {
         title: '願望清單',
         items: [
           '切換到「願望清單」分頁記錄想買的周邊；照片、名稱或連結擇一即可儲存，其他欄位都可之後補上。',
-          '「匯入相簿」可一次選擇最多 30 張照片或截圖，同一個商品的照片可合併成一個項目，細節之後再補。',
+          '「匯入相簿」一次最多可匯入 100 張照片或截圖，也可以分次挑；同一個商品的照片可合併成一個項目，細節之後再補。',
           '可記錄商店連結、價格、下單截止日、發售時間與優先度；7 天內到期的截止日會特別標示，狀態改為「已下單」後就不再提醒。',
           '收到商品後，在項目頁按「移到收藏」：先拍實品照片或選新照片（略過則沿用願望清單的照片），補上資料後儲存，項目就會移到收藏。',
-          '願望清單和收藏分開存放，兩者都會包含在 JSON 備份中。',
+          '願望清單和收藏分開存放，兩者都會包含在備份檔中。',
         ],
       },
       {
         title: '瀏覽器儲存與 App 更新',
         items: [
           '收藏、願望清單與照片存放在目前網域的 IndexedDB，綁定目前裝置、瀏覽器及使用者設定檔。',
-          '使用相同網域與瀏覽器時，一般程式、快取或 Service Worker 更新會保留收藏，不需要重新匯入 JSON。',
+          '使用相同網域與瀏覽器時，一般程式、快取或 Service Worker 更新會保留收藏，不需要重新匯入備份。',
           '「保護本機資料」可降低瀏覽器自動清除資料的機率，但無法防止手動清除、裝置損壞或遺失。',
           '「瀏覽器儲存空間」可按 ✕ 隱藏，之後點頂端的儲存空間圖示即可再顯示；空間快滿時會自動顯示。',
         ],
       },
       {
-        title: 'JSON 備份與還原',
+        title: '備份與還原',
         items: [
-          'JSON 是復原用安全備份，不是每次更新 App 都必須執行的步驟。',
+          '備份是復原用的安全備份，不是每次更新 App 都必須執行的步驟。',
+          '備份檔是 .zip 檔，照片以圖片檔存在裡面；舊版的 .json 備份也能匯入。',
+          '在 iPhone 或 iPad 上，備份準備好後按「儲存」→「儲存到檔案」。存檔畫面上方會顯示要存到哪個資料夾，可點一下改成「我的 iPhone」或「iCloud 雲碟」。',
+          '找不到備份檔時，打開「檔案」App，看「最近項目」或搜尋「acg-backup」。',
+          '匯入時若選檔畫面停在「iCloud 雲碟」，點下方「瀏覽」就能換到「我的 iPhone」等其他位置；備份存在哪裡都能匯入。',
           '請定期匯出，並在清除網站資料、更換裝置／瀏覽器／網域或重大更新前另外保存。',
           '備份可能包含收藏、願望清單、備註及照片，請存放在瀏覽器以外的私人安全位置。',
-          '匯入會取代目前的收藏與願望清單；兩者任一不是空的時，App 會先自動下載安全備份。',
+          '匯入會取代目前的收藏與願望清單；兩者任一不是空的時，App 會先儲存一份安全備份。',
           '0.4.0 之前建立的備份只含收藏，匯入時會保留目前的願望清單。',
         ],
       },
@@ -53,7 +57,7 @@ const content = {
         items: [
           'Android Chrome 可選「安裝應用程式」；iPhone／iPad Safari 可選「加入主畫面」。',
           '首次使用或更新後請先連線開啟一次，之後可離線開啟已快取的 App。',
-          '遇到問題可使用首頁的「問題回報」，請勿上傳 JSON 備份或敏感資料。',
+          '遇到問題可使用首頁的「問題回報」，請勿上傳備份檔或敏感資料。',
         ],
       },
     ],
@@ -61,14 +65,14 @@ const content = {
   en: {
     title: 'User guide',
     back: 'Back to collection',
-    intro: 'Your collection and wishlist stay in this device and browser. Normal app updates do not require exporting or importing JSON again.',
+    intro: 'Your collection and wishlist stay in this device and browser. Normal app updates do not require exporting or importing a backup again.',
     sections: [
       {
         title: 'Add and manage items',
         items: [
           'Select Add Item in the lower-right corner, enter a series or character, and choose a merchandise type. You can also save without them; the item is then marked Needs details.',
           'An item can hold up to 10 photos. The first is the cover; tap the star on another photo to make it the cover. Notes are optional. Use the home page to search or filter by type, series, or character.',
-          'Import album lets you choose up to 30 photos at once. Each photo starts as its own item; select the photos of one item and tap Merge, and the first becomes the cover. After Add all, the new items are marked Needs details.',
+          'Import album takes up to 100 photos, and Add photos lets you pick them in several rounds, also from different albums. Each photo starts as its own item; select the photos of one item and tap Merge, and the first becomes the cover. After Add all, the new items are marked Needs details.',
           'The Needs details bar on the home page can show only the unfinished items. Open one and select Fill in details to complete it.',
           'Open a collection card to view it, then use Edit Item to make changes or delete it.',
         ],
@@ -77,28 +81,32 @@ const content = {
         title: 'Wishlist',
         items: [
           'Open the Wishlist tab to track merchandise you want. A photo, a name, or a link is enough to save an entry; fill in the rest later.',
-          'Import album lets you choose up to 30 photos or screenshots at once and merge the ones of the same item into one entry; fill in the details later.',
+          'Import album takes up to 100 photos or screenshots, picked in one or more rounds, and merges the ones of the same item into one entry; fill in the details later.',
           'Record shop links, prices, order deadlines, release times, and priorities. Deadlines within 7 days are highlighted, and the reminder stops once the status is Ordered.',
           'When an item arrives, open it and select Move to collection. Take or choose new photos (or skip to keep the wishlist photos), fill in the details, and save; the entry moves to your collection.',
-          'The wishlist is stored apart from your collection, and JSON backups include both.',
+          'The wishlist is stored apart from your collection, and backups include both.',
         ],
       },
       {
         title: 'Browser storage and app updates',
         items: [
           'Your collection, wishlist, and photos are stored in IndexedDB for the current domain, device, browser, and browser profile.',
-          'On the same domain and browser, normal code, cache, or service-worker updates keep collection data and do not require a JSON import.',
+          'On the same domain and browser, normal code, cache, or service-worker updates keep collection data and do not require a backup import.',
           'Protect local data can reduce automatic browser eviction, but it cannot prevent manual deletion, device damage, or loss.',
           'Hide the Browser storage panel with ✕ and bring it back with the storage icon at the top. It shows again by itself when storage is nearly full.',
         ],
       },
       {
-        title: 'JSON backup and restore',
+        title: 'Backup and restore',
         items: [
-          'JSON is a recovery backup, not a required step for every app update.',
+          'A backup is for recovery, not a required step for every app update.',
+          'A backup is a .zip file with the photos inside as image files. Backups from earlier versions, which are .json files, can still be imported.',
+          'On iPhone or iPad, tap Save when the backup is ready, then Save to Files. The top of that screen shows the folder it saves to; tap it to choose another, such as On My iPhone or iCloud Drive.',
+          'If you cannot find a backup, open the Files app and look in Recents, or search for "acg-backup".',
+          'When importing, if the file picker opens in iCloud Drive, tap Browse at the bottom to go to On My iPhone or another location. A backup can be imported from any of them.',
           'Export periodically and before clearing site data, changing device, browser, or domain, or installing a major update.',
           'A backup may contain your collection, wishlist, notes, and photos. Store it privately outside the browser.',
-          'Import replaces the current collection and wishlist. If either is not empty, the app downloads a safety backup first.',
+          'Import replaces the current collection and wishlist. If either is not empty, the app saves a safety backup first.',
           'A backup made before version 0.4.0 holds only the collection, so importing it keeps your current wishlist.',
         ],
       },
@@ -107,7 +115,7 @@ const content = {
         items: [
           'Use Install app in Android Chrome or Add to Home Screen in Safari on iPhone or iPad.',
           'Open the app online once after first use or an update; the cached app can then start offline.',
-          'Use Send feedback on the home page for problems. Do not upload JSON backups or sensitive data.',
+          'Use Send feedback on the home page for problems. Do not upload backup files or sensitive data.',
         ],
       },
     ],
