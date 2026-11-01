@@ -440,6 +440,21 @@ describe('Home smoke flows', () => {
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
   });
 
+  it('says that it is working while a backup is prepared', async () => {
+    let finishReading;
+    dbMocks.items.toArray.mockReturnValue(new Promise(resolve => { finishReading = resolve; }));
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+    expect(await screen.findByText('Working on the backup… Large ones take a while.')).toBeInTheDocument();
+    finishReading([collectionItem(1, 0)]);
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/Working on the backup/)).not.toBeInTheDocument();
+  });
+
   describe('on an iPhone', () => {
     beforeEach(() => {
       Object.defineProperty(navigator, 'userAgent', {

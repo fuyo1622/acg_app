@@ -40,7 +40,8 @@ for published releases.
   50 MB import limit, and after Continue, Safari often saved nothing, because the
   download's address was revoked the moment the download started. Imports also refused
   any file over 50 MB. Backups now have no such limit, and the download's address stays
-  valid long enough to be saved.
+  valid long enough to be saved. While a backup is being prepared or restored, the header
+  now says so.
 
 ### Security
 

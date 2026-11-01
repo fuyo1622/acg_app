@@ -332,6 +332,9 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
           </NavLink>
         </nav>
 
+        {/* A large backup takes a while to prepare or restore; this says the app is on it. */}
+        <p className="backup-status" role="status">{isProcessing ? t('backupWorking') : ''}</p>
+
         {storageVisible && (
           <section
             className={`storage-status glass-panel ${storageNearFull ? 'storage-warning' : ''}`}

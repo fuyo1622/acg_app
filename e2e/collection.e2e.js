@@ -334,7 +334,10 @@ photoTest('backs up and restores a collection larger than the old 50 MB limit', 
   await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
   await page.getByLabel('Import backup file').setInputFiles(exportedPath);
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully');
+  // Writing 54 MB of photos takes WebKit several seconds; the header says it is working.
+  await expect(page.getByRole('status').filter({ hasText: 'Working on the backup' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Completed' }))
+    .toContainText('imported successfully', { timeout: 60_000 });
   await page.getByRole('button', { name: 'Close' }).click();
 
   await expect(page.getByRole('link', { name: /Large \d/ })).toHaveCount(6);
