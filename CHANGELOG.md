@@ -25,8 +25,22 @@ for published releases.
 - Moving a wishlist entry into the collection can take several new photos, and keeps all
   of the entry's photos when the photo step is skipped.
 - Database schema version 4 stores each record's photos as a list; an existing photo
-  becomes the cover during the upgrade. Backups use format version 4 with a list of photos
-  per record, and backups from earlier versions still restore.
+  becomes the cover during the upgrade.
+- A backup is now a ZIP archive (format version 5): backup.json holds the records, and
+  each photo is an image file next to it, about a quarter smaller than a photo written
+  into JSON. Restoring reads the photos straight from the file, so a large backup no
+  longer has to fit in memory. JSON backups from earlier versions still import.
+- On iPhone and iPad, a backup is saved through the share sheet once it is ready (tap
+  Save, then Save to Files). The safety backup before an import is saved the same way,
+  and if it is not saved, the app asks before replacing the current data.
+
+### Fixed
+
+- A large backup could not be saved or restored. The app warned that it was over the
+  50 MB import limit, and after Continue, Safari often saved nothing, because the
+  download's address was revoked the moment the download started. Imports also refused
+  any file over 50 MB. Backups now have no such limit, and the download's address stays
+  valid long enough to be saved.
 
 ### Security
 
