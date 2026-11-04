@@ -14,6 +14,8 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 - Store collection data and photos locally with IndexedDB.
 - Add, edit, delete, search, and filter merchandise records, and swipe between them on their
   pages in the list's order.
+- Manage the lists of types, series, and characters: add, rename (or merge), delete, drag
+  into order, or sort by name. Filters and forms follow that order.
 - Import an album: choose up to 100 photos, in one or more rounds, merge the photos of
   the same item, and fill in the series, character, and type later. Items still missing them are marked
   Needs details and can be listed on their own.
@@ -97,9 +99,10 @@ install its browsers with `npx playwright install chromium webkit`.
 ## Architecture and limitations
 
 - React 19, Vite, React Router, Dexie, and `vite-plugin-pwa`.
-- IndexedDB database `acg-merch-db` currently uses schema version 4, which keeps the
-  collection and the wishlist in separate tables and stores each record's photos as a
-  list, cover first. The canonical value is
+- IndexedDB database `acg-merch-db` currently uses schema version 5, which keeps the
+  collection and the wishlist in separate tables, stores each record's photos as a list,
+  cover first, and keeps the saved order of types, series, and characters in a third
+  table. The canonical value is
   `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
   Dexie migration and increment that value.
 - List cards show small copies of the photos, kept in a separate `acg-thumbnails` IndexedDB
