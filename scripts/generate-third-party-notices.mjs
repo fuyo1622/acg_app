@@ -40,7 +40,9 @@ const sections = packages
     const repository = typeof packageJson.repository === 'string'
       ? packageJson.repository
       : packageJson.repository?.url || packageJson.homepage || '';
-    const licenseText = readFileSync(licensePath, 'utf8').trim();
+    // Some packages ship their license with Windows line endings (tslib does). Normalizing
+    // them keeps the generated notices identical on every operating system.
+    const licenseText = readFileSync(licensePath, 'utf8').replace(/\r\n?/g, '\n').trim();
 
     return [
       `## ${name}@${version}`,
