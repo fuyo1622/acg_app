@@ -203,6 +203,21 @@ describe('backups in parts (format 6)', () => {
     expect((await rehydrateBackupFiles(opened)).items).toHaveLength(2500);
   });
 
+  it('keeps the order of the lists in the last part and restores it', async () => {
+    const terms = [{ field: 'series', values: ['Gundam', 'Evangelion'] }, { field: 'unknown', values: ['x'] }];
+    const files = asFiles(await collectParts({
+      items: [item(1, photoOfSize(100)), item(2, photoOfSize(100))],
+      wishlist: [],
+      terms,
+    }, { partBytes: 150 }));
+
+    const opened = await readBackupFiles(files);
+    expect(opened[0].payload).not.toHaveProperty('terms');
+    expect(opened[1].payload.terms).toEqual({ series: ['Gundam', 'Evangelion'] });
+    expect(validateBackupFiles(opened, BACKUP_VERSION)).toBe(true);
+    expect((await rehydrateBackupFiles(opened)).terms).toEqual([{ field: 'series', values: ['Gundam', 'Evangelion'] }]);
+  });
+
   it('still restores one backup file made before parts existed', async () => {
     const oldArchive = await handMadePart({ version: 5, items: [item(1)], wishlist: [] });
 
