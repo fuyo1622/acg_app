@@ -22,8 +22,10 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
   and move an entry into the collection when it arrives.
 - Keep up to 10 photos per item or entry, capture or select them, and compress large
   images before storage.
-- Export the collection and wishlist to one backup file, a ZIP archive with the photos
-  inside, and restore it later. Backups from earlier versions (JSON) still import.
+- Export the collection and wishlist to a backup, ZIP archives with the photos inside,
+  and restore it later. A large backup comes in files of about 200 MB, with photos over
+  500 KB made smaller, so a phone can save it; restore it by choosing all of its files at
+  once. Backups from earlier versions (JSON) still import.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.
 - Switch between Traditional Chinese and English.
 
@@ -103,6 +105,11 @@ install its browsers with `npx playwright install chromium webkit`.
 - List cards show small copies of the photos, kept in a separate `acg-thumbnails` IndexedDB
   database. It is a cache that can always be rebuilt, so backups leave it out.
 - No account, backend, cloud sync, or server-side copy of collection or wishlist data.
+- Backup format 6 is a set of parts: ZIP archives that each hold whole records, their
+  photos, and a `backup.json` naming the backup and the part. The last part gives the
+  number of parts and records, so a restore refuses an incomplete set and names the
+  missing parts. Photos are compressed to WebP, or to JPEG where the browser cannot make
+  WebP, as Safari cannot.
 - Backup import replaces the current collection and wishlist after confirmation and
   saves a safety backup first when either is not empty. A backup made before version
   0.4.0 holds only the collection, so importing it keeps the current wishlist. Backups

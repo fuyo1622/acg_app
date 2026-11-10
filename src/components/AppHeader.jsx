@@ -13,15 +13,18 @@ import {
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
 import AppDialog from './AppDialog';
-import { BACKUP_VERSION } from '../utils/constants';
+import { BACKUP_PART_BYTES, BACKUP_VERSION } from '../utils/constants';
 import {
-  createBackupArchive,
+  BackupPartsError,
+  createBackupParts,
   hasWishlistSection,
-  readBackupFile,
-  rehydrateBackup,
+  readBackupFiles,
+  rehydrateBackupFiles,
   replaceBackupInDb,
-  validateBackupPayload,
+  validateBackupFiles,
 } from '../utils/backupUtils';
+import { shrinkPhotoForBackup } from '../utils/imageUtils';
+import { getPhotos } from '../utils/photoUtils';
 import {
   formatBytes,
   getStorageStatus,
@@ -71,16 +74,41 @@ async function shareFile(file) {
   }
 }
 
+async function saveBackupFile(file) {
+  if (canShareFile(file)) return shareFile(file);
+  downloadFile(file);
+  return 'downloaded';
+}
+
 async function readBackupSections() {
   const [items, wishlist] = await Promise.all([db.items.toArray(), db.wishlist.toArray()]);
   return { items, wishlist };
 }
 
-async function createBackupFile(sections, prefix) {
-  const archive = await createBackupArchive(sections);
-  const filename = `${prefix}-${new Date().toISOString().slice(0, 10)}.zip`;
-  return new File([archive], filename, { type: 'application/zip' });
+// Tests set this to get several parts out of a few small photos.
+const TEST_PART_BYTES_KEY = 'acgBackupPartBytes';
+
+function backupPartBytes() {
+  try {
+    const override = Number(sessionStorage.getItem(TEST_PART_BYTES_KEY));
+    return override > 0 ? override : BACKUP_PART_BYTES;
+  } catch {
+    return BACKUP_PART_BYTES;
+  }
 }
+
+function countPhotos({ items, wishlist }) {
+  return [...items, ...wishlist].reduce((total, record) => total + getPhotos(record).length, 0);
+}
+
+// A backup in one file keeps the name it always had; the files of a larger one are numbered.
+function backupFileName(prefix, part) {
+  const date = new Date().toISOString().slice(0, 10);
+  const number = part.number === 1 && part.last ? '' : `-part${String(part.number).padStart(2, '0')}`;
+  return `${prefix}-${date}${number}.zip`;
+}
+
+const isSingleFile = part => part.number === 1 && part.last;
 
 const tabClassName = ({ isActive }) => `list-tab${isActive ? ' is-active' : ''}`;
 
@@ -103,19 +131,23 @@ function saveStoragePanelHidden(hidden) {
   }
 }
 
-// Shared by the collection and the wishlist. One backup file holds both lists, so export,
+// Shared by the collection and the wishlist. One backup holds both lists, so export,
 // import, and storage controls stay reachable from either tab.
 export default function AppHeader({ title, storageRefreshKey, children }) {
   const { lang, setLang, t } = useLanguage();
   const [isProcessing, setIsProcessing] = useState(false);
   const [notice, setNotice] = useState(null);
   const [stagedImport, setStagedImport] = useState(null);
-  const [readyExport, setReadyExport] = useState(null);
+  const [readyPart, setReadyPart] = useState(null);
+  const [progress, setProgress] = useState(null);
   const [unsavedSafetyImport, setUnsavedSafetyImport] = useState(null);
   const [storageStatus, setStorageStatus] = useState(null);
   const [storageHidden, setStorageHidden] = useState(readStoragePanelHidden);
   const fileInputRef = useRef(null);
   const showStorageRef = useRef(null);
+  // The backup being saved, one file at a time: { prefix, purpose, importData, parts, saved, names }.
+  const backupJobRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -137,63 +169,191 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     setNotice({ title: t('errorTitle'), message: t(messageKey) });
   };
 
+  const showImportError = (error) => {
+    const separator = lang === 'en' ? ', ' : '、';
+    const messages = error instanceof BackupPartsError ? {
+      missingParts: error.total === null
+        ? t('importMissingLastPart')
+        : t('importMissingParts', { total: error.total, missing: error.missing.join(separator) }),
+      mixedBackups: t('importMixedBackups'),
+      severalBackups: t('importSeveralBackups'),
+      repeatedParts: t('importRepeatedPart', { number: error.number }),
+    } : {};
+    setNotice({ title: t('errorTitle'), message: messages[error?.code] ?? t('importError') });
+  };
+
+  // A large backup takes minutes, and a phone that locks its screen pauses the app.
+  const keepScreenOn = async () => {
+    if (wakeLockRef.current && !wakeLockRef.current.released) return;
+    try {
+      wakeLockRef.current = (await navigator.wakeLock?.request('screen')) ?? null;
+    } catch {
+      wakeLockRef.current = null;
+    }
+  };
+
+  const endBackupJob = () => {
+    const job = backupJobRef.current;
+    backupJobRef.current = null;
+    job?.parts.return().catch(() => {});
+    setProgress(null);
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
+  };
+
+  useEffect(() => () => endBackupJob(), []);
+
+  // Starts saving `sections` as a backup. Its files are made one at a time, when asked for,
+  // so only one file's photos are held at once.
+  const startBackupJob = (sections, { prefix, purpose, importData = null }) => {
+    endBackupJob();
+    const job = { prefix, purpose, importData, saved: 0, names: [], photos: countPhotos(sections) };
+    let photosDone = 0;
+    job.parts = createBackupParts(sections, {
+      partBytes: backupPartBytes(),
+      preparePhoto: shrinkPhotoForBackup,
+      onPhotoDone: () => {
+        photosDone += 1;
+        if (backupJobRef.current === job) setProgress(current => ({ ...current, done: photosDone }));
+      },
+    });
+    backupJobRef.current = job;
+    return job;
+  };
+
+  // The job's next file, or null when the job was stopped in the meantime.
+  const prepareNextPart = async (job) => {
+    setProgress(current => ({ part: job.saved + 1, done: current?.done ?? 0, total: job.photos }));
+    keepScreenOn();
+    setIsProcessing(true);
+    try {
+      const { value, done } = await job.parts.next();
+      if (done || backupJobRef.current !== job) return null;
+      const file = new File([value.blob], backupFileName(job.prefix, value), { type: 'application/zip' });
+      return { number: value.number, last: value.last, purpose: job.purpose, file };
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // After a file of the job is saved: prepare the next one, or finish the job.
+  const continueBackupJob = async (job, part, result) => {
+    job.saved += 1;
+    job.names.push(part.file.name);
+    if (!part.last) {
+      const next = await prepareNextPart(job);
+      if (next) setReadyPart(next);
+      return;
+    }
+
+    endBackupJob();
+    if (job.purpose === 'safety') {
+      await runImport(job.importData);
+    } else if (job.saved === 1) {
+      // The share sheet decides where the file goes, so the app names it and says where to look.
+      setNotice({
+        title: t('backupSavedTitle'),
+        message: t(result === 'shared' ? 'backupSharedMessage' : 'backupDownloadedMessage', { name: part.file.name }),
+      });
+    } else {
+      setNotice({
+        title: t('backupPartsSavedTitle', { count: job.saved }),
+        message: t('backupPartsSavedMessage', { count: job.saved, first: job.names[0], last: job.names.at(-1) }),
+      });
+    }
+  };
+
   const handleExport = async () => {
     setIsProcessing(true);
     try {
-      const file = await createBackupFile(await readBackupSections(), 'acg-backup');
-      // A large backup takes a while to prepare, and the share sheet needs a tap of its
-      // own, so it opens from the ready dialog.
-      if (canShareFile(file)) setReadyExport(file);
-      else downloadFile(file);
+      const job = startBackupJob(await readBackupSections(), { prefix: 'acg-backup', purpose: 'backup' });
+      const part = await prepareNextPart(job);
+      if (!part) return;
+      // A backup in one file downloads at once where there is no share sheet. Otherwise each
+      // file opens from a dialog: preparing it takes a while, and the share sheet needs a tap.
+      if (isSingleFile(part) && !canShareFile(part.file)) {
+        downloadFile(part.file);
+        endBackupJob();
+        return;
+      }
+      setReadyPart(part);
     } catch (error) {
       console.error(error);
+      endBackupJob();
       showError('exportError');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // The share sheet decides where the file goes, so the app names it and says where to look.
-  const saveReadyExport = async () => {
-    const file = readyExport;
-    setReadyExport(null);
-    if (!file) return;
+  const saveReadyPart = async () => {
+    const part = readyPart;
+    const job = backupJobRef.current;
+    setReadyPart(null);
+    if (!part || !job) return;
 
-    const result = await shareFile(file);
-    if (result === 'cancelled') return;
-    setNotice({
-      title: t('backupSavedTitle'),
-      message: t(result === 'shared' ? 'backupSharedMessage' : 'backupDownloadedMessage', { name: file.name }),
-    });
+    const result = await saveBackupFile(part.file);
+    if (result === 'cancelled') {
+      // A backup in several files is no use without all of them, so the same file is
+      // offered again; stopping is a choice of its own.
+      if (isSingleFile(part)) endBackupJob();
+      else setReadyPart(part);
+      return;
+    }
+    try {
+      await continueBackupJob(job, part, result);
+    } catch (error) {
+      console.error(error);
+      endBackupJob();
+      showError(job.purpose === 'safety' ? 'importError' : 'exportError');
+    }
+  };
+
+  const stopBackupJob = () => {
+    const job = backupJobRef.current;
+    setReadyPart(null);
+    endBackupJob();
+    if (job?.purpose === 'safety') {
+      setUnsavedSafetyImport(job.importData);
+    } else if (job?.saved > 0) {
+      setNotice({ title: t('backupStoppedTitle'), message: t('backupStoppedMessage') });
+    }
   };
 
   const handleImport = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
 
     setIsProcessing(true);
     try {
-      const { payload, archive } = await readBackupFile(file);
-      validateBackupPayload(payload, BACKUP_VERSION, archive);
+      const opened = await readBackupFiles(files);
+      validateBackupFiles(opened, BACKUP_VERSION);
 
+      const importData = { opened };
       const current = await readBackupSections();
-      const safetyBackup = current.items.length > 0 || current.wishlist.length > 0
-        ? await createBackupFile(current, 'acg-auto-backup-before-import')
-        : null;
-      setStagedImport({ payload, archive, safetyBackup });
+      let safetyPart = null;
+      if (current.items.length > 0 || current.wishlist.length > 0) {
+        // The first file of the safety backup is ready before the question, so that the
+        // tap answering it can open the share sheet.
+        const job = startBackupJob(current, { prefix: 'acg-auto-backup-before-import', purpose: 'safety', importData });
+        safetyPart = await prepareNextPart(job);
+        if (!safetyPart) return;
+      }
+      setStagedImport({ ...importData, safetyPart });
     } catch (error) {
       console.error(error);
-      showError('importError');
+      endBackupJob();
+      showImportError(error);
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
       setIsProcessing(false);
     }
   };
 
-  const runImport = async ({ payload, archive }) => {
+  async function runImport({ opened }) {
     setIsProcessing(true);
     try {
-      await replaceBackupInDb(db, await rehydrateBackup(payload, archive));
+      await replaceBackupInDb(db, await rehydrateBackupFiles(opened));
       setNotice({ title: t('successTitle'), message: t('importSuccess') });
       setStorageStatus(await getStorageStatus());
     } catch (error) {
@@ -202,25 +362,40 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }
 
   const confirmImport = async () => {
     const importData = stagedImport;
     setStagedImport(null);
     if (!importData) return;
 
-    const { safetyBackup } = importData;
-    if (safetyBackup && canShareFile(safetyBackup)) {
-      // The current data is replaced only once its safety backup is kept, or once the
-      // user says to go on without it.
-      if (await shareFile(safetyBackup) === 'cancelled') {
-        setUnsavedSafetyImport(importData);
-        return;
-      }
-    } else if (safetyBackup) {
-      downloadFile(safetyBackup);
+    const job = backupJobRef.current;
+    const { safetyPart } = importData;
+    if (!safetyPart || !job) {
+      await runImport(importData);
+      return;
     }
-    await runImport(importData);
+
+    // The current data is replaced only once its safety backup is kept, or once the user
+    // says to go on without it.
+    const result = await saveBackupFile(safetyPart.file);
+    if (result === 'cancelled') {
+      endBackupJob();
+      setUnsavedSafetyImport(importData);
+      return;
+    }
+    try {
+      await continueBackupJob(job, safetyPart, result);
+    } catch (error) {
+      console.error(error);
+      endBackupJob();
+      showError('importError');
+    }
+  };
+
+  const cancelImport = () => {
+    setStagedImport(null);
+    endBackupJob();
   };
 
   const replaceWithoutSafetyBackup = () => {
@@ -260,9 +435,40 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     saveStoragePanelHidden(false);
   };
 
-  const importWarningKey = stagedImport && !hasWishlistSection(stagedImport.payload)
+  const importWarningKey = stagedImport && !hasWishlistSection(stagedImport.opened[0].payload)
     ? 'importWarningKeepsWishlist'
     : 'importWarning';
+
+  const formatCount = count => count.toLocaleString(storageLocale);
+  const statusText = (() => {
+    if (!isProcessing) return '';
+    if (progress?.total > 0) {
+      return t('backupPreparing', {
+        part: progress.part,
+        done: formatCount(Math.min(progress.done, progress.total)),
+        total: formatCount(progress.total),
+      });
+    }
+    return t('backupWorking');
+  })();
+
+  const readyDialog = (() => {
+    if (!readyPart) return { title: '', message: '' };
+    const values = {
+      number: readyPart.number,
+      name: readyPart.file.name,
+      size: formatBytes(readyPart.file.size, storageLocale),
+    };
+    if (isSingleFile(readyPart)) {
+      return { title: t('exportReadyTitle'), message: t('exportReadyMessage', values) };
+    }
+    return {
+      title: t(readyPart.purpose === 'safety' ? 'safetyPartReadyTitle' : 'exportPartReadyTitle', values),
+      // Chinese sentences follow each other without a space.
+      message: [t('exportPartReadyMessage', values), t(readyPart.last ? 'exportPartReadyLast' : 'exportPartReadyNext')]
+        .join(lang === 'en' ? ' ' : ''),
+    };
+  })();
 
   return (
     <>
@@ -289,7 +495,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
             <button
               type="button"
               onClick={handleExport}
-              disabled={isProcessing}
+              disabled={isProcessing || Boolean(readyPart)}
               className="btn-icon glass-panel"
               title={t('exportBackup')}
               aria-label={t('exportBackup')}
@@ -299,7 +505,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isProcessing}
+              disabled={isProcessing || Boolean(readyPart)}
               className="btn-icon glass-panel"
               title={t('importBackup')}
               aria-label={t('importBackup')}
@@ -309,6 +515,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
             <input
               type="file"
               accept="application/zip,.zip,application/json,.json"
+              multiple
               aria-label={t('importFile')}
               className="sr-only"
               ref={fileInputRef}
@@ -341,7 +548,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         </nav>
 
         {/* A large backup takes a while to prepare or restore; this says the app is on it. */}
-        <p className="backup-status" role="status">{isProcessing ? t('backupWorking') : ''}</p>
+        <p className="backup-status" role="status">{statusText}</p>
 
         {storageVisible && (
           <section
@@ -393,7 +600,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         confirmLabel={t('continue')}
         cancelLabel={t('cancel')}
         onConfirm={confirmImport}
-        onCancel={() => setStagedImport(null)}
+        onCancel={cancelImport}
         destructive
       />
       <AppDialog
@@ -407,16 +614,13 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         destructive
       />
       <AppDialog
-        open={Boolean(readyExport)}
-        title={t('exportReadyTitle')}
-        message={t('exportReadyMessage', {
-          name: readyExport?.name ?? '',
-          size: readyExport ? formatBytes(readyExport.size, storageLocale) : '',
-        })}
+        open={Boolean(readyPart)}
+        title={readyDialog.title}
+        message={readyDialog.message}
         confirmLabel={t('saveBackup')}
-        cancelLabel={t('cancel')}
-        onConfirm={saveReadyExport}
-        onCancel={() => setReadyExport(null)}
+        cancelLabel={t(readyPart && !isSingleFile(readyPart) ? 'stopBackup' : 'cancel')}
+        onConfirm={saveReadyPart}
+        onCancel={stopBackupJob}
       />
       <AppDialog
         open={Boolean(notice)}

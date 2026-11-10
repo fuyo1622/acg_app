@@ -124,7 +124,7 @@ test('restores the wishlist from the shared backup file', async ({ page }) => {
   ]).then(([download]) => download);
   const exportedPath = await exported.path();
   const { backup } = await readBackupArchive(exportedPath);
-  expect(backup.version).toBe(5);
+  expect(backup.version).toBe(6);
   expect(backup.wishlist).toEqual([expect.objectContaining({ name: 'Rei plush', status: 'want' })]);
 
   await page.getByRole('link', { name: /Rei plush/ }).click();

@@ -6,6 +6,18 @@ for published releases.
 
 ## [Unreleased]
 
+### Fixed
+
+- A backup of a large collection could not be saved on an iPhone: a file of many
+  gigabytes is more than the share sheet can take, a ZIP backup stopped at 4 GB, and so
+  did a photo over 10 MB. A large backup now comes in files of about 200 MB, made and
+  saved one at a time, and the photos in it over 500 KB are made smaller, at most 1600 px
+  on the longest side, the size new photos are stored at. To restore it, choose all of its
+  files at once; the app says which are missing. A backup that fits in one file works as
+  before, and older backups still import.
+- On iPhone, new photos were stored at full size, because Safari cannot make the WebP
+  copies the app asked for. Where WebP cannot be made, photos are now compressed as JPEG.
+
 ## [0.6.0] - 2026-11-10
 
 ### Added

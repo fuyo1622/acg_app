@@ -439,7 +439,7 @@ photoTest('keeps every photo of an item through a backup and restore', async ({ 
   ]).then(([download]) => download);
   const exportedPath = await exported.path();
   const { archive, backup } = await readBackupArchive(exportedPath);
-  expect(backup.version).toBe(5);
+  expect(backup.version).toBe(6);
   expect(backup.items).toEqual([expect.objectContaining({
     character: ['Asuka Langley'],
     photos: ['photos/items/0001-1.png', 'photos/items/0001-2.png'],
@@ -464,6 +464,138 @@ photoTest('keeps every photo of an item through a backup and restore', async ({ 
   await expect(page.getByRole('img', { name: 'Asuka Langley' })).toBeVisible();
   await page.getByRole('button', { name: 'Show photo 2' }).click();
   await expect(page.getByRole('button', { name: 'Show photo 2' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+// Photos as a phone stores them when it keeps them at full size: large, and real images,
+// so a backup can make them smaller. Random pixels keep each PNG about 9 MB.
+async function seedFullSizePhotos(page, count) {
+  return page.evaluate(async (photoCount) => {
+    const photos = [];
+    for (let index = 0; index < photoCount; index += 1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 2000;
+      canvas.height = 1500;
+      const context = canvas.getContext('2d');
+      const pixels = context.createImageData(2000, 1500);
+      for (let offset = 0; offset < pixels.data.length; offset += 65536) {
+        crypto.getRandomValues(pixels.data.subarray(offset, Math.min(offset + 65536, pixels.data.length)));
+      }
+      for (let alpha = 3; alpha < pixels.data.length; alpha += 4) pixels.data[alpha] = 255;
+      context.putImageData(pixels, 0, 0);
+      photos.push(await new Promise(resolve => canvas.toBlob(resolve, 'image/png')));
+    }
+
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open('acg-merch-db');
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('items', 'readwrite');
+        photos.forEach((photo, index) => {
+          const now = new Date(Date.now() - index);
+          transaction.objectStore('items').add({
+            series: ['Full size'],
+            character: [`Full size ${index + 1}`],
+            merchandise_type: 'figure',
+            notes: '',
+            photos: [photo],
+            created_at: now,
+            updated_at: now,
+          });
+        });
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+    return Math.min(...photos.map(photo => photo.size));
+  }, count);
+}
+
+async function clearCollection(page) {
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-merch-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('items', 'readwrite');
+      transaction.objectStore('items').clear();
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    };
+    request.onerror = () => reject(request.error);
+  }));
+  await page.reload();
+}
+
+async function saveWithDialog(page, buttonName) {
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: buttonName }).click(),
+  ]);
+  return download;
+}
+
+photoTest('saves a large backup in several files with smaller photos, and restores it from all of them', async ({ page }) => {
+  photoTest.slow(true, 'Three 9 MB photos are made smaller, saved in three files, and restored twice');
+  await useEnglish(page);
+  // A file holds at most one item here, so three items make three files.
+  await page.evaluate(() => sessionStorage.setItem('acgBackupPartBytes', '1'));
+  const storedBytes = await seedFullSizePhotos(page, 3);
+  expect(storedBytes).toBeGreaterThan(5 * 1024 * 1024);
+  await page.reload();
+  await expect(page.getByRole('link', { name: /Full size \d/ })).toHaveCount(3);
+
+  const parts = [];
+  await page.getByRole('button', { name: 'Export Backup' }).click();
+  for (const number of [1, 2, 3]) {
+    await expect(page.getByRole('dialog', { name: `Backup file ${number} is ready` })).toBeVisible({ timeout: 30_000 });
+    const download = await saveWithDialog(page, 'Save');
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^acg-backup-\\d{4}-\\d{2}-\\d{2}-part0${number}\\.zip$`));
+    parts.push(await download.path());
+  }
+  await expect(page.getByRole('dialog', { name: 'Backup saved in 3 files' })).toContainText('choose all 3 files at once');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // Each photo in the backup is a much smaller copy of the stored one.
+  for (const path of parts) {
+    const { archive, backup } = await readBackupArchive(path);
+    expect(backup.items).toHaveLength(1);
+    expect(archive.size(backup.items[0].photos[0])).toBeLessThan(storedBytes / 3);
+  }
+
+  // As if the browser lost the data: the three files are all that is left.
+  await clearCollection(page);
+  await expect(page.getByText('No items found')).toBeVisible();
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles([parts[2], parts[0], parts[1]]);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('link', { name: /Full size \d/ })).toHaveCount(3);
+
+  // Choosing only some of the files names the missing one and changes nothing.
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles([parts[0], parts[2]]);
+  await expect(page.getByRole('dialog', { name: 'Something went wrong' })).toContainText('Missing file numbers: 2.');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // Restoring over the current data first saves a safety backup, here in three files too.
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(parts);
+  const firstSafetyFile = await saveWithDialog(page, 'Continue');
+  expect(firstSafetyFile.suggestedFilename()).toMatch(/^acg-auto-backup-before-import-\d{4}-\d{2}-\d{2}-part01\.zip$/);
+  for (const number of [2, 3]) {
+    await expect(page.getByRole('dialog', { name: `Safety backup file ${number} is ready` })).toBeVisible({ timeout: 30_000 });
+    await saveWithDialog(page, 'Save');
+  }
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('link', { name: /Full size \d/ })).toHaveCount(3);
 });
 
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {

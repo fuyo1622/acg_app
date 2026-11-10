@@ -1,10 +1,37 @@
+import { BACKUP_SHRINK_PHOTO_BYTES } from './constants';
+
 export const COMPRESSION_CONFIG = {
   maxWidth: 1600,
   maxHeight: 1600,
   quality: 0.85,
   preferredMimeType: 'image/webp',
+  fallbackMimeType: 'image/jpeg',
   minSizeToCompress: 1024 * 50 // 50 KB
 };
+
+let webpEncoding;
+
+// Safari cannot encode WebP: asked for it, a canvas hands back a PNG, which is often larger
+// than the photo it was made from, so the photo used to be kept at full size. Where WebP
+// cannot be made, photos are compressed as JPEG.
+function compressedMimeType() {
+  if (webpEncoding === undefined) {
+    try {
+      const probe = document.createElement('canvas');
+      probe.width = 1;
+      probe.height = 1;
+      webpEncoding = probe.toDataURL(COMPRESSION_CONFIG.preferredMimeType).startsWith('data:image/webp');
+    } catch {
+      webpEncoding = false;
+    }
+  }
+  return webpEncoding ? COMPRESSION_CONFIG.preferredMimeType : COMPRESSION_CONFIG.fallbackMimeType;
+}
+
+// For tests: forget which formats this browser can encode.
+export function resetEncodingSupport() {
+  webpEncoding = undefined;
+}
 
 // A phone frees a canvas only when memory is collected, and caps the total. Shrinking it
 // frees its memory at once.
@@ -75,12 +102,15 @@ export function compressImage(file) {
         return resolve(file);
       }
 
+      const targetMimeType = compressedMimeType();
+      // JPEG has no transparency; transparent areas turn white instead of black.
+      if (targetMimeType === 'image/jpeg') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+      }
       ctx.drawImage(decoded.source, 0, 0, width, height);
       decoded.release();
 
-      // Export canvas
-      const targetMimeType = COMPRESSION_CONFIG.preferredMimeType;
-      
       canvas.toBlob((blob) => {
         releaseCanvas(canvas);
         if (!blob) return resolve(file);
@@ -88,7 +118,6 @@ export function compressImage(file) {
         // Only return compressed version if it actually saves space
         if (blob.size >= file.size) return resolve(file);
         
-        // Browsers unsupported by targeted MimeType safely default to image/png
         const finalMimeType = blob.type || targetMimeType;
         const resultFileName = file instanceof File ? file.name : 'image';
         
@@ -103,6 +132,17 @@ export function compressImage(file) {
     }
     })();
   });
+}
+
+// A photo for a backup: one larger than BACKUP_SHRINK_PHOTO_BYTES is compressed the way a
+// newly added photo is, so a backup of photos stored at full size stays small enough to save
+// on a phone. GIFs are kept, so they stay animated. Returns the photo itself when it is small
+// already or cannot be made smaller.
+export async function shrinkPhotoForBackup(photo) {
+  if (!(photo instanceof Blob) || photo.size <= BACKUP_SHRINK_PHOTO_BYTES || photo.type === 'image/gif') {
+    return photo;
+  }
+  return compressImage(photo);
 }
 
 export const THUMBNAIL_SIZE = 320;

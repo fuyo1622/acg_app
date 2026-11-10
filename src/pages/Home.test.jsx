@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
 import { takeAlbumFiles } from '../utils/albumHandoff';
-import { replaceBackupInDb } from '../utils/backupUtils';
+import { createBackupParts, replaceBackupInDb } from '../utils/backupUtils';
 import { APP_RELEASE_URL, APP_VERSION } from '../utils/version';
 import { readZip } from '../utils/zipUtils';
 import Home from './Home';
@@ -217,6 +217,8 @@ describe('Home smoke flows', () => {
     const clickSpy = vi.spyOn(importInput, 'click').mockImplementation(() => {});
 
     expect(importInput).toHaveAttribute('accept', 'application/zip,.zip,application/json,.json');
+    // A backup saved in several files is restored from all of them, chosen at once.
+    expect(importInput).toHaveAttribute('multiple');
     fireEvent.click(importButton);
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
@@ -361,7 +363,8 @@ describe('Home smoke flows', () => {
       .map(([blob]) => blob)
       .filter(blob => blob.type === 'application/zip');
     const exported = JSON.parse(await (await readZip(backupFile)).text('backup.json'));
-    expect(exported.version).toBe(5);
+    expect(exported.version).toBe(6);
+    expect(exported.part).toEqual(expect.objectContaining({ number: 1, last: true, parts: 1, items: 1, wishlist: 1 }));
     expect(exported.items).toEqual([expect.objectContaining({ id: 1, photos: [] })]);
     expect(exported.items[0]).not.toHaveProperty('photo');
     expect(exported.wishlist).toEqual([expect.objectContaining({ id: 5, name: 'Rei plush', photos: [] })]);
@@ -573,6 +576,110 @@ describe('Home smoke flows', () => {
       await waitFor(() => {
         expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined });
       });
+    });
+
+    describe('with a backup too large for one file', () => {
+      beforeEach(() => {
+        // Each record makes a file of its own.
+        sessionStorage.setItem('acgBackupPartBytes', '1');
+        dbMocks.items.toArray.mockResolvedValue([collectionItem(1, 100), collectionItem(2, 100)]);
+      });
+
+      afterEach(() => {
+        sessionStorage.removeItem('acgBackupPartBytes');
+      });
+
+      it('saves it in several files, each from a dialog of its own, then says how to restore them', async () => {
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+        const first = await screen.findByRole('dialog', { name: 'Backup file 1 is ready' });
+        expect(first).toHaveTextContent('several files');
+        expect(first).toHaveTextContent('the next file is prepared');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        const second = await screen.findByRole('dialog', { name: 'Backup file 2 is ready' });
+        expect(second).toHaveTextContent('This is the last file.');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        const saved = await screen.findByRole('dialog', { name: 'Backup saved in 2 files' });
+        expect(saved).toHaveTextContent('choose all 2 files at once');
+        const names = navigator.share.mock.calls.map(([{ files: [file] }]) => file.name);
+        expect(names).toEqual([
+          expect.stringMatching(/^acg-backup-\d{4}-\d{2}-\d{2}-part01\.zip$/),
+          expect.stringMatching(/^acg-backup-\d{4}-\d{2}-\d{2}-part02\.zip$/),
+        ]);
+        const parts = await Promise.all(navigator.share.mock.calls.map(async ([{ files: [file] }]) => (
+          JSON.parse(await (await readZip(file)).text('backup.json'))
+        )));
+        expect(parts.map(part => part.items.map(item => item.id))).toEqual([[1], [2]]);
+        expect(parts[1].part).toEqual(expect.objectContaining({ last: true, parts: 2, items: 2 }));
+      });
+
+      it('offers a file again when its share sheet is closed, and says the backup is unfinished if stopped', async () => {
+        navigator.share
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+        await screen.findByRole('dialog', { name: 'Backup file 2 is ready' });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        // Closed without saving: the same file is offered again.
+        expect(await screen.findByRole('dialog', { name: 'Backup file 2 is ready' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Stop backup' }));
+
+        expect(await screen.findByRole('dialog', { name: 'Backup not finished' }))
+          .toHaveTextContent('a restore needs every file');
+        expect(navigator.share).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
+
+  describe('restoring a backup saved in several files', () => {
+    // Three items with a real, tiny PNG each, saved one item per file.
+    async function backupParts() {
+      const png = () => new Blob([Uint8Array.from(atob('iVBORw0KGgo='), character => character.charCodeAt(0))], {
+        type: 'image/png',
+      });
+      const files = [];
+      const parts = createBackupParts(
+        { items: [1, 2, 3].map(id => ({ ...collectionItem(id, 0), photos: [png()] })), wishlist: [] },
+        { partBytes: 1 },
+      );
+      for await (const part of parts) {
+        files.push(new File([part.blob], `acg-backup-part0${part.number}.zip`, { type: 'application/zip' }));
+      }
+      return files;
+    }
+
+    it('restores every file chosen at once, in any order', async () => {
+      const [first, second, third] = await backupParts();
+      renderHome();
+
+      fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [third, first, second] } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+      await waitFor(() => {
+        expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
+          items: [expect.objectContaining({ id: 1 }), expect.objectContaining({ id: 2 }), expect.objectContaining({ id: 3 })],
+          wishlist: [],
+        });
+      });
+    });
+
+    it('says which files are missing instead of restoring part of the backup', async () => {
+      const [first, , third] = await backupParts();
+      renderHome();
+
+      fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [first, third] } });
+
+      expect(await screen.findByRole('dialog', { name: 'Something went wrong' }))
+        .toHaveTextContent('This backup has 3 files. Missing file numbers: 2.');
+      expect(replaceBackupInDb).not.toHaveBeenCalled();
     });
   });
 

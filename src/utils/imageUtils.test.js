@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { compressImage, createThumbnail } from './imageUtils';
+import { compressImage, createThumbnail, resetEncodingSupport, shrinkPhotoForBackup } from './imageUtils';
 
 describe('compressImage utility', () => {
   beforeAll(() => {
@@ -156,5 +156,73 @@ describe('createThumbnail', () => {
     expect(thumbnail.type).toBe('image/jpeg');
     // It lets go of the decoded photo at once instead of waiting for memory to be collected.
     expect(element.removeAttribute).toHaveBeenCalledWith('src');
+  });
+});
+
+describe('choosing how photos are compressed', () => {
+  const large = () => new File([new Uint8Array(600 * 1024)], 'photo.png', { type: 'image/png' });
+
+  beforeEach(() => {
+    resetEncodingSupport();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    resetEncodingSupport();
+  });
+
+  // A canvas that can encode WebP or cannot, like Chrome's and Safari's.
+  function stubCanvas({ webp }) {
+    const context = { drawImage: vi.fn(), fillRect: vi.fn(), fillStyle: '' };
+    const canvas = {
+      getContext: () => context,
+      toDataURL: type => (webp && type === 'image/webp' ? 'data:image/webp;base64,UklGR' : 'data:image/png;base64,iVBOR'),
+      toBlob: vi.fn((callback, type) => callback(new Blob(['small'], { type }))),
+    };
+    const createElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(tag => (tag === 'canvas' ? canvas : createElement(tag)));
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 3200, height: 2400, close: vi.fn() }));
+    return { canvas, context };
+  }
+
+  it('makes WebP where the browser can', async () => {
+    const { canvas, context } = stubCanvas({ webp: true });
+
+    const compressed = await compressImage(large());
+
+    expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/webp', 0.85);
+    expect(compressed.type).toBe('image/webp');
+    expect(context.fillRect).not.toHaveBeenCalled();
+  });
+
+  it('makes JPEG on white where WebP cannot be made, as on an iPhone, instead of keeping the full photo', async () => {
+    const { canvas, context } = stubCanvas({ webp: false });
+    const steps = [];
+    context.fillRect.mockImplementation(() => steps.push('fill'));
+    context.drawImage.mockImplementation(() => steps.push('draw'));
+
+    const compressed = await compressImage(large());
+
+    expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.85);
+    expect(compressed.type).toBe('image/jpeg');
+    expect(compressed.size).toBeLessThan(600 * 1024);
+    expect(context.fillStyle).toBe('#ffffff');
+    expect(context.fillRect).toHaveBeenCalledWith(0, 0, 1600, 1200);
+    expect(steps).toEqual(['fill', 'draw']);
+  });
+
+  it('shrinks only large photos for a backup, and never a GIF, which would stop moving', async () => {
+    const { canvas } = stubCanvas({ webp: false });
+    const small = new File([new Uint8Array(400 * 1024)], 'small.png', { type: 'image/png' });
+    const gif = new File([new Uint8Array(900 * 1024)], 'moving.gif', { type: 'image/gif' });
+
+    expect(await shrinkPhotoForBackup(small)).toBe(small);
+    expect(await shrinkPhotoForBackup(gif)).toBe(gif);
+    expect(canvas.toBlob).not.toHaveBeenCalled();
+
+    const shrunk = await shrinkPhotoForBackup(large());
+    expect(shrunk.type).toBe('image/jpeg');
+    expect(shrunk.size).toBeLessThan(600 * 1024);
   });
 });
