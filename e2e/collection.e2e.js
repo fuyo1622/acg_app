@@ -304,8 +304,12 @@ test('manages the lists of types, series and characters', async ({ page, browser
   await page.mouse.up();
   await expect.poll(seriesNames).toEqual(['Macross', 'Evangelion', 'Gundam']);
 
-  await page.getByRole('button', { name: 'Sort by name' }).click();
-  await expect.poll(seriesNames).toEqual(['Evangelion', 'Gundam', 'Macross']);
+  // dnd-kit ignores a click that lands within 50 ms of a drop, so this can need another
+  // click. Sorting twice gives the same order.
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Sort by name' }).click();
+    expect(await seriesNames()).toEqual(['Evangelion', 'Gundam', 'Macross']);
+  }).toPass();
 
   await page.getByRole('button', { name: /^Evangelion 1 items use it$/ }).click();
   await page.getByRole('button', { name: 'Rename' }).click();
