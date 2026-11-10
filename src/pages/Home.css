@@ -282,6 +282,12 @@
   padding: 0;
 }
 
+/* A blur needs extra memory per card and shows nothing against the flat page behind it. */
+.item-card.glass-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .item-card:hover {
   transform: translateY(-4px);
   border-color: var(--accent-primary);

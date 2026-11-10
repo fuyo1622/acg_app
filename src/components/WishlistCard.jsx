@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Images } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useObjectUrl } from '../hooks/useObjectUrl';
+import { useCardImageRef } from '../hooks/useCardImage';
 import { WISHLIST_STATUS_LABELS } from '../utils/constants';
 import { getCoverPhoto, getPhotos } from '../utils/photoUtils';
 import {
@@ -16,7 +16,7 @@ import {
 export default function WishlistCard({ entry, order }) {
   const { t, lang } = useLanguage();
   const cover = getCoverPhoto(entry);
-  const imageUrl = useObjectUrl(cover);
+  const imageRef = useCardImageRef('wishlist', entry);
   const photoCount = getPhotos(entry).length;
   const separator = lang === 'en' ? ', ' : '、';
   const title = getWishlistTitle(entry, separator) || t('untitledEntry');
@@ -38,7 +38,7 @@ export default function WishlistCard({ entry, order }) {
     >
       <div className="image-container">
         {cover ? (
-          <img src={imageUrl} alt={title} loading="lazy" />
+          imageRef && <img ref={imageRef} alt={title} loading="lazy" />
         ) : (
           <div className="no-image">{t('noPhoto')}</div>
         )}

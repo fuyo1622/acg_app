@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Images } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useObjectUrl } from '../hooks/useObjectUrl';
+import { useCardImageRef } from '../hooks/useCardImage';
 import { getCoverPhoto, getPhotos } from '../utils/photoUtils';
 import { needsDetails } from '../utils/validationUtils';
 import { formatValues } from '../utils/valueUtils';
@@ -10,7 +10,7 @@ import { formatValues } from '../utils/valueUtils';
 export default function ItemCard({ item, order }) {
   const { t, lang } = useLanguage();
   const cover = getCoverPhoto(item);
-  const imageUrl = useObjectUrl(cover);
+  const imageRef = useCardImageRef('items', item);
   const photoCount = getPhotos(item).length;
   const separator = lang === 'en' ? ', ' : '、';
   const characterText = formatValues(item.character, separator);
@@ -24,7 +24,7 @@ export default function ItemCard({ item, order }) {
     >
       <div className="image-container">
         {cover ? (
-          <img src={imageUrl} alt={characterText || seriesText || t('untitledEntry')} loading="lazy" />
+          imageRef && <img ref={imageRef} alt={characterText || seriesText || t('untitledEntry')} loading="lazy" />
         ) : (
           <div className="no-image">{t('noPhoto')}</div>
         )}

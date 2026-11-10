@@ -99,6 +99,8 @@ npm run audit
 - IndexedDB 資料庫 `acg-merch-db` 目前為 schema version 4，收藏與願望清單分別存放在
   不同的資料表，每筆資料的照片存成清單、第一張是封面；唯一版本來源是 `src/services/db.js` 的 `DB_SCHEMA_VERSION`。日後變更
   schema 必須同步提高版本、加入 Dexie migration 並測試舊資料轉換。
+- 清單卡片顯示照片的縮圖，存放在另一個 IndexedDB 資料庫 `acg-thumbnails`；這是可以隨時重建的
+  快取，備份不包含它。
 - 沒有帳號、後端、雲端同步或收藏與願望清單的伺服器副本。
 - 備份採取代式還原，會同時取代收藏與願望清單；兩者任一不是空的時，覆蓋前會先自動
   儲存安全備份。0.4.0 之前建立的備份只含收藏，匯入時會保留目前的願望清單；每筆只有

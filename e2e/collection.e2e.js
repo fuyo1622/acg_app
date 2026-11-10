@@ -246,6 +246,37 @@ photoTest('imports album photos as unfinished items and fills one in later', asy
   await expect.poll(() => shelfPhoto.evaluate(image => image.naturalWidth)).toBe(640);
 });
 
+photoTest('shows a small copy of each photo on the list and the full photo on its page', async ({ page }) => {
+  await useEnglish(page);
+  await page.getByLabel('Album photos').setInputFiles([solidPng('tall.png', 1200, 1600)]);
+  await page.getByRole('button', { name: 'Add all (1)' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  const card = page.getByRole('link', { name: /Unknown Character/ });
+  const photoHeight = photo => photo.evaluate(image => image.naturalHeight);
+  const cardPhoto = card.getByRole('img', { name: 'Untitled' });
+  await expect.poll(() => photoHeight(cardPhoto)).toBe(480);
+
+  // The copy is kept, so reopening the app does not have to decode the photo again.
+  const storedCopies = () => page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-thumbnails');
+    request.onsuccess = () => {
+      const database = request.result;
+      database.transaction('thumbnails').objectStore('thumbnails').getAll().onsuccess = event => {
+        resolve(event.target.result.map(entry => entry.blob.type));
+        database.close();
+      };
+    };
+    request.onerror = () => reject(request.error);
+  }));
+  await expect.poll(storedCopies).toEqual(['image/jpeg']);
+  await page.reload();
+  await expect.poll(() => photoHeight(cardPhoto)).toBe(480);
+
+  await card.click();
+  await expect.poll(() => photoHeight(page.getByRole('img', { name: 'Untitled' }))).toBe(1600);
+});
+
 photoTest('moves between items with the arrows, the keyboard and a swipe', async ({ page, browserName }) => {
   await useEnglish(page);
   await page.getByLabel('Album photos').setInputFiles([png('a.png'), png('b.png'), png('c.png')]);
@@ -271,8 +302,10 @@ photoTest('moves between items with the arrows, the keyboard and a swipe', async
 
   // Desktop WebKit has no touch input; in Chromium, a real swipe goes through the browser.
   if (browserName === 'chromium') {
-    const panel = await page.locator('.detail-info').boundingBox();
-    const y = panel.y + 40;
+    // The page itself takes the swipe and stays in place while one item replaces another,
+    // so it can be measured at any moment.
+    const panel = await page.locator('.item-detail-page').boundingBox();
+    const y = panel.y + 200;
     const client = await page.context().newCDPSession(page);
     await client.send('Emulation.setTouchEmulationEnabled', { enabled: true });
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: panel.x + panel.width - 60, y }] });

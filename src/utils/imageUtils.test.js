@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import { compressImage, createThumbnail } from './imageUtils';
 
 describe('compressImage utility', () => {
@@ -54,6 +54,10 @@ describe('compressImage utility', () => {
 describe('createThumbnail', () => {
   const photo = new File(['photo'], 'photo.webp', { type: 'image/webp' });
 
+  beforeEach(() => {
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:photo'), revokeObjectURL: vi.fn() });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -65,8 +69,46 @@ describe('createThumbnail', () => {
     return bitmap;
   }
 
+  function stubCanvas() {
+    const context = { drawImage: vi.fn() };
+    const stub = { sizeWhenExported: null, context };
+    const canvas = {
+      getContext: () => context,
+      toBlob: (callback, type) => {
+        stub.sizeWhenExported = [canvas.width, canvas.height];
+        callback(new Blob(['thumbnail'], { type }));
+      },
+    };
+    stub.canvas = canvas;
+    const createElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(tag => (tag === 'canvas' ? canvas : createElement(tag)));
+    return stub;
+  }
+
+  // An image element that loads, or fails, the way a browser's would.
+  function stubImageElement({ width, height, fails = false }) {
+    const created = [];
+    vi.stubGlobal('Image', class {
+      width = width;
+
+      height = height;
+
+      removeAttribute = vi.fn();
+
+      constructor() {
+        created.push(this);
+      }
+
+      set src(_url) {
+        setTimeout(() => (fails ? this.onerror(new Error('cannot decode')) : this.onload()), 0);
+      }
+    });
+    return created;
+  }
+
   it('returns the photo itself when it cannot be decoded', async () => {
     vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new Error('cannot decode')));
+    stubImageElement({ width: 0, height: 0, fails: true });
 
     expect(await createThumbnail(photo)).toBe(photo);
   });
@@ -80,20 +122,39 @@ describe('createThumbnail', () => {
 
   it('scales a large photo down to a small JPEG with the same proportions', async () => {
     const bitmap = stubBitmap(1600, 1200);
-    const context = { drawImage: vi.fn() };
-    const canvas = {
-      getContext: () => context,
-      toBlob: (callback, type) => callback(new Blob(['thumbnail'], { type })),
-    };
-    const createElement = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation(tag => (tag === 'canvas' ? canvas : createElement(tag)));
+    const stub = stubCanvas();
 
     const thumbnail = await createThumbnail(photo);
 
-    expect([canvas.width, canvas.height]).toEqual([320, 240]);
-    expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 320, 240);
+    expect(stub.context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 320, 240);
+    expect(stub.sizeWhenExported).toEqual([320, 240]);
+    // The canvas gives its memory back as soon as the image is out.
+    expect([stub.canvas.width, stub.canvas.height]).toEqual([0, 0]);
     expect(thumbnail).not.toBe(photo);
     expect(thumbnail.type).toBe('image/jpeg');
     expect(bitmap.close).toHaveBeenCalled();
+  });
+
+  it('honours the size it is asked for', async () => {
+    const bitmap = stubBitmap(1200, 1600);
+    const { context } = stubCanvas();
+
+    await createThumbnail(photo, 480);
+
+    expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 360, 480);
+  });
+
+  it('falls back to an image element where the browser refuses the orientation option', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new TypeError('Unknown imageOrientation')));
+    const created = stubImageElement({ width: 1600, height: 1200 });
+    const { context } = stubCanvas();
+
+    const thumbnail = await createThumbnail(photo);
+
+    const [element] = created;
+    expect(context.drawImage).toHaveBeenCalledWith(element, 0, 0, 320, 240);
+    expect(thumbnail.type).toBe('image/jpeg');
+    // It lets go of the decoded photo at once instead of waiting for memory to be collected.
+    expect(element.removeAttribute).toHaveBeenCalledWith('src');
   });
 });

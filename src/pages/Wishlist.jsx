@@ -18,6 +18,7 @@ import {
   WISHLIST_STATUS_LABELS,
 } from '../utils/constants';
 import { useImportedNotice } from '../hooks/useImportedNotice';
+import { pruneThumbnails } from '../services/thumbnails';
 import { handOffAlbumFiles } from '../utils/albumHandoff';
 import { filterWishlist } from '../utils/wishlistUtils';
 import './Home.css';
@@ -43,6 +44,10 @@ export default function Wishlist() {
   const entries = useLiveQuery(
     () => db.wishlist.orderBy('created_at').reverse().toArray(),
   );
+
+  useEffect(() => {
+    if (entries) pruneThumbnails('wishlist', entries.map(entry => entry.id));
+  }, [entries]);
 
   useEffect(() => {
     setCurrentPage(1);

@@ -1,9 +1,17 @@
 import '@testing-library/jest-dom/vitest';
+import { StrictMode } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../contexts/LanguageContext';
+import { getCardImage } from '../services/thumbnails';
 import ItemCard from './ItemCard';
+
+vi.mock('../services/thumbnails', () => ({
+  getCardImage: vi.fn(),
+}));
+
+const smallCopy = new Blob(['small'], { type: 'image/jpeg' });
 
 function renderCard(item) {
   return render(
@@ -18,6 +26,7 @@ function renderCard(item) {
 describe('ItemCard', () => {
   beforeEach(() => {
     localStorage.setItem('appLang', 'en');
+    vi.mocked(getCardImage).mockResolvedValue(smallCopy);
     vi.stubGlobal('URL', {
       ...globalThis.URL,
       createObjectURL: vi.fn(() => 'blob:card'),
@@ -55,7 +64,7 @@ describe('ItemCard', () => {
     expect(screen.getByText('No Photo')).toBeInTheDocument();
   });
 
-  it('renders a photo through an object URL with descriptive alt text', () => {
+  it('renders a photo through an object URL with descriptive alt text', async () => {
     renderCard({
       id: 4,
       series: ['Gundam'],
@@ -64,7 +73,7 @@ describe('ItemCard', () => {
       photo: new Blob(['photo'], { type: 'image/webp' }),
     });
 
-    const image = screen.getByRole('img', { name: 'Char' });
+    const image = await screen.findByRole('img', { name: 'Char' });
     expect(image).toHaveAttribute('src', 'blob:card');
     expect(image).toHaveAttribute('loading', 'lazy');
   });
@@ -77,13 +86,52 @@ describe('ItemCard', () => {
     expect(screen.getByRole('link').querySelectorAll('.item-badge')).toHaveLength(1);
   });
 
-  it('shows the cover photo and how many photos the item has', () => {
+  it('shows a small copy of the cover, never the full photo, and how many photos there are', async () => {
     const photos = [new Blob(['front'], { type: 'image/png' }), new Blob(['back'], { type: 'image/png' })];
-    renderCard({ id: 6, series: ['Evangelion'], character: ['Asuka'], merchandise_type: 'figure', photos });
+    const item = { id: 6, series: ['Evangelion'], character: ['Asuka'], merchandise_type: 'figure', photos };
+    renderCard(item);
 
-    expect(screen.getByRole('img', { name: 'Asuka' })).toHaveAttribute('src', 'blob:card');
-    expect(URL.createObjectURL).toHaveBeenCalledWith(photos[0]);
+    expect(await screen.findByRole('img', { name: 'Asuka' })).toHaveAttribute('src', 'blob:card');
+    expect(getCardImage).toHaveBeenCalledWith('items', item, photos[0], expect.any(AbortSignal));
+    // Compared by identity: to the matchers, any two Blobs look equal.
+    expect(vi.mocked(URL.createObjectURL).mock.calls.map(([blob]) => blob)).toEqual([expect.any(Blob)]);
+    expect(vi.mocked(URL.createObjectURL).mock.calls[0][0]).toBe(smallCopy);
     expect(screen.getByRole('img', { name: '2 photos' })).toHaveTextContent('2');
     expect(screen.queryByText('Needs details')).not.toBeInTheDocument();
+  });
+
+  it('keeps its image through the extra mount React does in development', async () => {
+    render(
+      <StrictMode>
+        <LanguageProvider>
+          <MemoryRouter>
+            <ItemCard item={{ id: 9, series: ['Gundam'], photos: [new Blob(['photo'], { type: 'image/png' })] }} />
+          </MemoryRouter>
+        </LanguageProvider>
+      </StrictMode>,
+    );
+
+    expect(await screen.findByRole('img', { name: 'Gundam' })).toHaveAttribute('src', 'blob:card');
+  });
+
+  it('lets go of its image as soon as it is removed', async () => {
+    const { unmount } = renderCard({ id: 8, series: ['Gundam'], photos: [new Blob(['photo'], { type: 'image/png' })] });
+    const image = await screen.findByRole('img', { name: 'Gundam' });
+    expect(image).toHaveAttribute('src', 'blob:card');
+
+    unmount();
+
+    expect(image).not.toHaveAttribute('src');
+  });
+
+  it('stops waiting for its small copy once it leaves the screen', () => {
+    vi.mocked(getCardImage).mockReturnValue(new Promise(() => {}));
+    const { unmount } = renderCard({ id: 7, series: ['Gundam'], photos: [new Blob(['photo'], { type: 'image/png' })] });
+    const [, , , signal] = vi.mocked(getCardImage).mock.calls[0];
+
+    expect(signal.aborted).toBe(false);
+    expect(screen.queryByRole('img', { name: 'Gundam' })).not.toBeInTheDocument();
+    unmount();
+    expect(signal.aborted).toBe(true);
   });
 });

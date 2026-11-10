@@ -45,6 +45,10 @@ for published releases.
   any file over 50 MB. Backups now have no such limit, and the download's address stays
   valid long enough to be saved. While a backup is being prepared or restored, the header
   now says so.
+- Paging through a large collection or wishlist could crash the app on a phone. Each page
+  of cards decoded 50 full-size photos, about 370 MB, and memory kept growing from page to
+  page. Cards now show small copies, made once, one at a time, and kept in a separate cache
+  that is not part of backups.
 
 ### Security
 

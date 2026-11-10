@@ -6,6 +6,38 @@ export const COMPRESSION_CONFIG = {
   minSizeToCompress: 1024 * 50 // 50 KB
 };
 
+// A phone frees a canvas only when memory is collected, and caps the total. Shrinking it
+// frees its memory at once.
+function releaseCanvas(canvas) {
+  canvas.width = 0;
+  canvas.height = 0;
+}
+
+// Decodes an image for drawing, upright whatever its EXIF orientation. Browsers where
+// createImageBitmap fails or lacks orientation support go through an image element.
+async function decodeImage(file) {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
+  } catch {
+    const url = URL.createObjectURL(file);
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => { URL.revokeObjectURL(url); resolve(element); };
+      element.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+      element.src = url;
+    });
+    // An image element keeps its decoded pixels until memory is next collected, unless its
+    // source is dropped.
+    return {
+      source: image,
+      width: image.width,
+      height: image.height,
+      release: () => image.removeAttribute('src'),
+    };
+  }
+}
+
 export function compressImage(file) {
   if (!file || !(file instanceof Blob) || !file.type.startsWith('image/')) {
     return Promise.resolve(file);
@@ -19,29 +51,8 @@ export function compressImage(file) {
   return new Promise((resolve) => {
     (async () => {
       try {
-      let imageObj = null;
-      let width = 0;
-      let height = 0;
-      let isBitmap = false;
-
-      // Try EXIF-safe decoding first
-      try {
-        imageObj = await createImageBitmap(file, { imageOrientation: 'from-image' });
-        width = imageObj.width;
-        height = imageObj.height;
-        isBitmap = true;
-      } catch {
-        // Fallback for browsers that failed createImageBitmap or lack orientation support
-        const url = URL.createObjectURL(file);
-        imageObj = await new Promise((res, rej) => {
-          const img = new Image();
-          img.onload = () => { URL.revokeObjectURL(url); res(img); };
-          img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image load failed')); };
-          img.src = url;
-        });
-        width = imageObj.width;
-        height = imageObj.height;
-      }
+      const decoded = await decodeImage(file);
+      let { width, height } = decoded;
 
       // Calculate preserved aspect ratio bounded dimensions
       if (width > COMPRESSION_CONFIG.maxWidth || height > COMPRESSION_CONFIG.maxHeight) {
@@ -60,17 +71,18 @@ export function compressImage(file) {
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
-        if (isBitmap) imageObj.close();
+        decoded.release();
         return resolve(file);
       }
 
-      ctx.drawImage(imageObj, 0, 0, width, height);
-      if (isBitmap) imageObj.close();
+      ctx.drawImage(decoded.source, 0, 0, width, height);
+      decoded.release();
 
       // Export canvas
       const targetMimeType = COMPRESSION_CONFIG.preferredMimeType;
       
       canvas.toBlob((blob) => {
+        releaseCanvas(canvas);
         if (!blob) return resolve(file);
         
         // Only return compressed version if it actually saves space
@@ -100,25 +112,26 @@ export const THUMBNAIL_SIZE = 320;
 // of that. Returns the photo itself when it is already small or cannot be decoded.
 export async function createThumbnail(photo, size = THUMBNAIL_SIZE) {
   try {
-    const bitmap = await createImageBitmap(photo);
-    const scale = size / Math.max(bitmap.width, bitmap.height);
+    const decoded = await decodeImage(photo);
+    const scale = size / Math.max(decoded.width, decoded.height);
     if (scale >= 1) {
-      bitmap.close();
+      decoded.release();
       return photo;
     }
 
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.width = Math.max(1, Math.round(decoded.width * scale));
+    canvas.height = Math.max(1, Math.round(decoded.height * scale));
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      bitmap.close();
+      decoded.release();
       return photo;
     }
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
+    ctx.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+    decoded.release();
 
     const thumbnail = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    releaseCanvas(canvas);
     return thumbnail ?? photo;
   } catch {
     return photo;

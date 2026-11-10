@@ -100,6 +100,8 @@ install its browsers with `npx playwright install chromium webkit`.
   list, cover first. The canonical value is
   `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
   Dexie migration and increment that value.
+- List cards show small copies of the photos, kept in a separate `acg-thumbnails` IndexedDB
+  database. It is a cache that can always be rebuilt, so backups leave it out.
 - No account, backend, cloud sync, or server-side copy of collection or wishlist data.
 - Backup import replaces the current collection and wishlist after confirmation and
   saves a safety backup first when either is not empty. A backup made before version

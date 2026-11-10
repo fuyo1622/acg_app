@@ -10,6 +10,7 @@ import AppHeader from '../components/AppHeader';
 import ItemCard from '../components/ItemCard';
 import Pagination from '../components/Pagination';
 import { useImportedNotice } from '../hooks/useImportedNotice';
+import { pruneThumbnails } from '../services/thumbnails';
 import { handOffAlbumFiles } from '../utils/albumHandoff';
 import { COLLECTION_PAGE_SIZE, DEFAULT_TYPES } from '../utils/constants';
 import { filterItems, getUniqueValues, resolveFilterValue } from '../utils/filterUtils';
@@ -31,6 +32,10 @@ export default function Home() {
   const items = useLiveQuery(
     () => db.items.orderBy('created_at').reverse().toArray(),
   );
+
+  useEffect(() => {
+    if (items) pruneThumbnails('items', items.map(item => item.id));
+  }, [items]);
 
   useEffect(() => {
     setCurrentPage(1);
