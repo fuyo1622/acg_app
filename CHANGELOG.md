@@ -6,6 +6,8 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-10
+
 ### Fixed
 
 - A backup of a large collection could not be saved on an iPhone: a file of many
