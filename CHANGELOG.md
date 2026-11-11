@@ -6,6 +6,14 @@ for published releases.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a phone, the cards of a page seen for the first time stayed empty for half a minute
+  or more: each card waited for a small copy of its photo, and the copies are made one at
+  a time. A card now shows its photo at once, as before 0.6.0, and swaps in the small copy
+  when it is ready. Leaving a page still lets go of its photos, so paging through a large
+  collection does not build up memory again.
+
 ## [0.6.1] - 2026-11-11
 
 ### Fixed

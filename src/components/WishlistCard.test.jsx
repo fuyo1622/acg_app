@@ -65,7 +65,9 @@ describe('WishlistCard', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/wishlist/item/3');
     expect(screen.getByRole('heading', { name: 'Untitled' })).toBeInTheDocument();
     expect(await screen.findByRole('img', { name: 'Untitled' })).toHaveAttribute('src', 'blob:card');
-    expect(getCardImage).toHaveBeenCalledWith('wishlist', expect.objectContaining({ id: 3 }), expect.any(Blob), expect.any(AbortSignal));
+    expect(getCardImage).toHaveBeenCalledWith('wishlist', expect.objectContaining({ id: 3 }), expect.any(Blob), expect.objectContaining({
+      signal: expect.any(AbortSignal),
+    }));
     expect(vi.mocked(URL.createObjectURL).mock.calls[0][0]).toBe(smallCopy);
     expect(screen.getByText('Want')).toBeInTheDocument();
   });
