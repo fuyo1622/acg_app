@@ -21,7 +21,7 @@ for published releases.
 - The English item form names the built-in types the way the filters do, such as
   Figure/Statue instead of figure.
 
-## [0.6.1] - 2026-11-10
+## [0.6.1] - 2026-11-11
 
 ### Fixed
 
@@ -37,7 +37,7 @@ for published releases.
 - On iPhone, new photos were stored at full size, because Safari cannot make the WebP
   copies the app asked for. Where WebP cannot be made, photos are now compressed as JPEG.
 
-## [0.6.0] - 2026-11-10
+## [0.6.0] - 2026-11-11
 
 ### Added
 
