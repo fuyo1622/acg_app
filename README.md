@@ -12,16 +12,20 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 ## Features
 
 - Store collection data and photos locally with IndexedDB.
-- Add, edit, delete, search, and filter merchandise records.
-- Import an album: choose up to 30 photos at once, merge the photos of the same item,
-  and fill in the series, character, and type later. Items still missing them are marked
+- Add, edit, delete, search, and filter merchandise records, and swipe between them on their
+  pages in the list's order.
+- Import an album: choose up to 100 photos, in one or more rounds, merge the photos of
+  the same item, and fill in the series, character, and type later. Items still missing them are marked
   Needs details and can be listed on their own.
 - Keep a separate wishlist of merchandise you want, with shop links, prices, order
   deadlines, and priorities. Import several screenshots at once and fill in details later,
   and move an entry into the collection when it arrives.
 - Keep up to 10 photos per item or entry, capture or select them, and compress large
   images before storage.
-- Export the collection and wishlist to one JSON backup and restore them later.
+- Export the collection and wishlist to a backup, ZIP archives with the photos inside,
+  and restore it later. A large backup comes in files of about 200 MB, with photos over
+  500 KB made smaller, so a phone can save it; restore it by choosing all of its files at
+  once. Backups from earlier versions (JSON) still import.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.
 - Switch between Traditional Chinese and English.
 
@@ -48,9 +52,9 @@ Open the app online once before testing offline mode. Collection and wishlist da
 - Collection and wishlist data, photos included, remain in IndexedDB across normal app,
   cache, and service-worker updates when the same domain, device, browser, and browser
   profile are used.
-- A normal app release does not require exporting or re-importing JSON. Tested database
+- A normal app release does not require exporting or re-importing a backup. Tested database
   migrations preserve data when the schema changes.
-- JSON is a recovery backup, not an update mechanism. Export periodically and before
+- A backup is for recovery, not an update mechanism. Export periodically and before
   clearing site data, changing device, browser, or production domain, or installing a
   major release.
 - **Protect local data** requests persistent browser storage and can reduce automatic
@@ -98,9 +102,16 @@ install its browsers with `npx playwright install chromium webkit`.
   list, cover first. The canonical value is
   `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
   Dexie migration and increment that value.
+- List cards show small copies of the photos, kept in a separate `acg-thumbnails` IndexedDB
+  database. It is a cache that can always be rebuilt, so backups leave it out.
 - No account, backend, cloud sync, or server-side copy of collection or wishlist data.
+- Backup format 6 is a set of parts: ZIP archives that each hold whole records, their
+  photos, and a `backup.json` naming the backup and the part. The last part gives the
+  number of parts and records, so a restore refuses an incomplete set and names the
+  missing parts. Photos are compressed to WebP, or to JPEG where the browser cannot make
+  WebP, as Safari cannot.
 - Backup import replaces the current collection and wishlist after confirmation and
-  downloads a safety backup first when either is not empty. A backup made before version
+  saves a safety backup first when either is not empty. A backup made before version
   0.4.0 holds only the collection, so importing it keeps the current wishlist. Backups
   from versions with one photo per record still restore.
 - Browser storage policies can remove local data; keep exported backups.
@@ -123,7 +134,7 @@ Use the bilingual [feedback form](https://tally.so/r/KYNy7M) for usage questions
 bug reports, or feature suggestions. No GitHub account is required. GitHub users may
 also open a [GitHub issue](https://github.com/fuyo1622/acg_app/issues).
 
-Do not upload JSON backups, private collection photos, passwords, or other sensitive
+Do not upload backup files, private collection photos, passwords, or other sensitive
 data. Report security vulnerabilities through the process in [SECURITY.md](SECURITY.md),
 not through the public form or a public issue.
 

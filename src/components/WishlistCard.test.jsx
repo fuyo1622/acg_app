@@ -3,7 +3,14 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../contexts/LanguageContext';
+import { getCardImage } from '../services/thumbnails';
 import WishlistCard from './WishlistCard';
+
+vi.mock('../services/thumbnails', () => ({
+  getCardImage: vi.fn(),
+}));
+
+const smallCopy = new Blob(['small'], { type: 'image/jpeg' });
 
 function renderCard(entry) {
   return render(
@@ -51,13 +58,27 @@ describe('WishlistCard', () => {
     vi.clearAllMocks();
   });
 
-  it('links to the entry and labels a bare screenshot as untitled', () => {
+  it('links to the entry and labels a bare screenshot as untitled', async () => {
+    vi.mocked(getCardImage).mockResolvedValue(smallCopy);
     renderCard(entry({ photo: new Blob(['shot'], { type: 'image/png' }) }));
 
     expect(screen.getByRole('link')).toHaveAttribute('href', '/wishlist/item/3');
     expect(screen.getByRole('heading', { name: 'Untitled' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Untitled' })).toHaveAttribute('src', 'blob:card');
+    expect(await screen.findByRole('img', { name: 'Untitled' })).toHaveAttribute('src', 'blob:card');
+    expect(getCardImage).toHaveBeenCalledWith('wishlist', expect.objectContaining({ id: 3 }), expect.any(Blob), expect.any(AbortSignal));
+    expect(vi.mocked(URL.createObjectURL).mock.calls[0][0]).toBe(smallCopy);
     expect(screen.getByText('Want')).toBeInTheDocument();
+  });
+
+  it('lets go of its image as soon as it is removed', async () => {
+    vi.mocked(getCardImage).mockResolvedValue(smallCopy);
+    const { unmount } = renderCard(entry({ photo: new Blob(['shot'], { type: 'image/png' }) }));
+    const image = await screen.findByRole('img', { name: 'Untitled' });
+    expect(image).toHaveAttribute('src', 'blob:card');
+
+    unmount();
+
+    expect(image).not.toHaveAttribute('src');
   });
 
   it('shows price, shop, priority and an approaching deadline', () => {

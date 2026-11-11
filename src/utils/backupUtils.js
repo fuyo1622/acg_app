@@ -3,10 +3,14 @@ import { isWebUrl } from './linkUtils';
 import { mapWithConcurrency } from './concurrencyUtils';
 import { getPhotos } from './photoUtils';
 import { createWishlistEntry, isDateKey } from './wishlistUtils';
+import { createZip, isZip, readZip } from './zipUtils';
 import {
   BACKUP_CONCURRENCY,
   BACKUP_LIMITS,
+  BACKUP_PART_BYTES,
+  BACKUP_VERSION,
   DEFAULT_WISHLIST_CURRENCY,
+  PARTED_BACKUP_VERSION,
   WISHLIST_BACKUP_VERSION,
   WISHLIST_LIMITS,
   WISHLIST_PRIORITIES,
@@ -18,6 +22,24 @@ export { mapWithConcurrency };
 const DATA_URL_PATTERN = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]*={0,2})$/;
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 const WISHLIST_SUBJECT = 'Wishlist entry';
+
+export const BACKUP_DATA_FILE = 'backup.json';
+const PHOTO_EXTENSIONS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const PHOTO_TYPES = Object.fromEntries(Object.entries(PHOTO_EXTENSIONS).map(([type, extension]) => [extension, type]));
+const ARCHIVE_PHOTO_PATTERN = /^photos\/[\w/-]+\.(png|jpg|webp|gif)$/;
+const BACKUP_ID_PATTERN = /^[\w-]{8,64}$/;
+
+// Why a set of backup files cannot be restored, in a form the app can explain: parts
+// missing (`missing` lists them, `total` is null when the last part is the one missing),
+// parts from different backups, or several separate backups at once.
+export class BackupPartsError extends Error {
+  constructor(code, details = {}) {
+    super(`Backup parts cannot be restored: ${code}`);
+    this.name = 'BackupPartsError';
+    this.code = code;
+    Object.assign(this, details);
+  }
+}
 
 function dataUrlToBytes(dataUrl) {
   const match = DATA_URL_PATTERN.exec(dataUrl);
@@ -132,8 +154,25 @@ function validatePhoto(photo, index, subject) {
   }
 }
 
-// Format 4 stores `photos`, cover first; earlier formats store at most one `photo`.
-function validatePhotos(record, index, subject) {
+// Format 5 stores each photo as a file in the backup archive, format 4 stores `photos` as
+// Data URLs, cover first, and earlier formats store at most one `photo`.
+function validatePhotos(record, index, subject, archive) {
+  if (archive) {
+    if (!Array.isArray(record.photos) || record.photos.length > BACKUP_LIMITS.maxPhotosPerRecord) {
+      throw new Error(`${subject} at index ${index} has invalid photos`);
+    }
+    for (const path of record.photos) {
+      if (typeof path !== 'string' || !ARCHIVE_PHOTO_PATTERN.test(path) || !archive.has(path)) {
+        throw new Error(`${subject} at index ${index} refers to a missing photo`);
+      }
+      const size = archive.size(path);
+      if (!(size > 0 && size <= BACKUP_LIMITS.maxPhotoBytes)) {
+        throw new Error(`${subject} at index ${index} has a photo of invalid size`);
+      }
+    }
+    return;
+  }
+
   if (record.photos === undefined) {
     validatePhoto(record.photo, index, subject);
     return;
@@ -153,7 +192,7 @@ function isBlank(value) {
   return value === undefined || value === null || value === '';
 }
 
-function validateItem(item, index, ids) {
+function validateItem(item, index, ids, archive) {
   if (typeof item !== 'object' || item === null) {
     throw new Error(`Item at index ${index} is invalid`);
   }
@@ -167,7 +206,7 @@ function validateItem(item, index, ids) {
   validateText(item.merchandise_type ?? '', 'merchandise_type', BACKUP_LIMITS.maxTypeLength, index);
   validateText(item.notes ?? '', 'notes', BACKUP_LIMITS.maxNotesLength, index);
   validateTimestamps(item, index, 'Item');
-  validatePhotos(item, index, 'Item');
+  validatePhotos(item, index, 'Item', archive);
 }
 
 // Links render as anchors, so a backup may only carry the same web addresses the form
@@ -194,7 +233,7 @@ function validateChoice(value, choices, label, index) {
   }
 }
 
-function validateWishlistEntry(entry, index, ids) {
+function validateWishlistEntry(entry, index, ids, archive) {
   const subject = WISHLIST_SUBJECT;
   if (typeof entry !== 'object' || entry === null) {
     throw new Error(`${subject} at index ${index} is invalid`);
@@ -228,7 +267,7 @@ function validateWishlistEntry(entry, index, ids) {
   validateChoice(entry.status, WISHLIST_STATUSES, 'status', index);
   validateText(entry.notes ?? '', 'notes', BACKUP_LIMITS.maxNotesLength, index, { subject });
   validateTimestamps(entry, index, subject);
-  validatePhotos(entry, index, subject);
+  validatePhotos(entry, index, subject, archive);
 
   const hasName = typeof entry.name === 'string' && entry.name.trim() !== '';
   if (getPhotos(entry).length === 0 && !hasName && !(entry.links?.length > 0)) {
@@ -275,84 +314,100 @@ function wishlistMetadata(entry) {
   };
 }
 
-// A Data URL prefix such as "data:image/webp;base64," plus JSON quoting.
-const PHOTO_ENCODING_OVERHEAD_BYTES = 32;
-
-function byteLength(text) {
-  return typeof TextEncoder === 'function'
-    ? new TextEncoder().encode(text).length
-    : text.length;
+function createBackupId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function estimateRecordBytes(record, toMetadata) {
-  const encodedPhotoBytes = getPhotos(record)
-    .filter(photo => photo instanceof Blob)
-    .reduce((total, photo) => total + Math.ceil(photo.size / 3) * 4 + PHOTO_ENCODING_OVERHEAD_BYTES, 0);
-  const metadataBytes = byteLength(JSON.stringify({ ...toMetadata(record ?? {}), photos: [] }));
-  return encodedPhotoBytes + metadataBytes;
+async function archivePart(part, id, totals) {
+  const payload = {
+    ...buildBackupPayload({ items: part.items, wishlist: part.wishlist }, BACKUP_VERSION),
+    part: totals
+      ? { backup: id, number: part.number, last: true, parts: part.number, ...totals }
+      : { backup: id, number: part.number, last: false },
+  };
+  const blob = await createZip([{ name: BACKUP_DATA_FILE, data: JSON.stringify(payload, null, 2) }, ...part.files]);
+  return { number: part.number, last: Boolean(totals), blob };
 }
 
-function estimateSectionBytes(records, toMetadata) {
-  if (!Array.isArray(records)) return 0;
-  return records.reduce((total, record) => total + estimateRecordBytes(record, toMetadata), 0);
-}
-
-// Approximates the exported JSON size without serializing photos, so the app can warn
-// before it builds a backup that its own import limits would later reject.
-export function estimateBackupBytes({ items, wishlist } = {}) {
-  return estimateSectionBytes(items, itemMetadata) + estimateSectionBytes(wishlist, wishlistMetadata);
-}
-
-export function exceedsBackupSizeLimit(sections) {
-  return estimateBackupBytes(sections) > BACKUP_LIMITS.maxFileBytes;
-}
-
-export function validateBackupFile(file) {
-  if (!file || typeof file.size !== 'number') throw new Error('Backup file missing');
-  if (file.size > BACKUP_LIMITS.maxFileBytes) throw new Error('Backup file is too large');
-  return true;
-}
-
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Failed to read Blob as Data URL'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function serializePhoto(photo) {
-  if (!(photo instanceof Blob)) return null;
-  if (photo.size > BACKUP_LIMITS.maxPhotoBytes) {
-    throw new Error('Photo exceeds backup size limit');
+// Format 5 made a backup a ZIP archive: backup.json holds the records, and each photo is an
+// image file next to it, referred to by its path. Format 6 splits a backup into parts, such
+// archives that each hold whole records and their photos, and backup.json says which backup
+// and which part it is. A part ends before the record whose photos would take it past
+// `partBytes`, so only one part's photos are held at a time and each part can be saved on
+// its own. The last part also says how many parts and records there are, so a restore can
+// tell when one is missing. `preparePhoto` may make a photo smaller first.
+export async function* createBackupParts({ items, wishlist }, {
+  partBytes = BACKUP_PART_BYTES,
+  preparePhoto = photo => photo,
+  onPhotoDone = () => {},
+} = {}) {
+  if (!Array.isArray(items) || items.length > BACKUP_LIMITS.maxItems) {
+    throw new Error('Collection exceeds backup item limit');
   }
-  return blobToDataUrl(photo);
-}
-
-async function serializeRecords(records, toMetadata, limitMessage) {
-  if (!Array.isArray(records) || records.length > BACKUP_LIMITS.maxItems) {
-    throw new Error(limitMessage);
+  if (!Array.isArray(wishlist) || wishlist.length > BACKUP_LIMITS.maxItems) {
+    throw new Error('Wishlist exceeds backup entry limit');
   }
 
-  // Records run four at a time and each record's photos one after another, so no more
-  // than four photos are encoded at once.
-  return mapWithConcurrency(records, BACKUP_CONCURRENCY, async record => {
-    const photos = [];
-    for (const photo of getPhotos(record)) {
-      const dataUrl = await serializePhoto(photo);
-      if (dataUrl) photos.push(dataUrl);
+  const id = createBackupId();
+  const newPart = number => ({ number, items: [], wishlist: [], files: [], bytes: 0 });
+  let part = newPart(1);
+
+  const sections = [['items', items, itemMetadata], ['wishlist', wishlist, wishlistMetadata]];
+  for (const [section, records, toMetadata] of sections) {
+    for (const record of records) {
+      const photos = [];
+      for (const stored of getPhotos(record).filter(photo => photo instanceof Blob)) {
+        const photo = await preparePhoto(stored);
+        if (!PHOTO_EXTENSIONS[photo.type]) throw new Error(`Unsupported photo type: ${photo.type || 'unknown'}`);
+        if (photo.size > BACKUP_LIMITS.maxPhotoBytes) throw new Error('Photo exceeds backup size limit');
+        photos.push(photo);
+        onPhotoDone();
+      }
+
+      const bytes = photos.reduce((total, photo) => total + photo.size, 0);
+      if (part.items.length + part.wishlist.length > 0 && part.bytes + bytes > partBytes) {
+        yield await archivePart(part, id, null);
+        part = newPart(part.number + 1);
+      }
+
+      const position = String(part[section].length + 1).padStart(4, '0');
+      part[section].push({
+        ...toMetadata(record),
+        photos: photos.map((photo, index) => {
+          const name = `photos/${section}/${position}-${index + 1}.${PHOTO_EXTENSIONS[photo.type]}`;
+          part.files.push({ name, data: photo });
+          return name;
+        }),
+      });
+      part.bytes += bytes;
     }
-    return { ...toMetadata(record), photos };
-  });
+  }
+
+  yield await archivePart(part, id, { items: items.length, wishlist: wishlist.length });
 }
 
-export function serializeBackupItems(items) {
-  return serializeRecords(items, itemMetadata, 'Collection exceeds backup item limit');
+// The whole backup as one archive, however large.
+export async function createBackupArchive(sections) {
+  const { value } = await createBackupParts(sections, { partBytes: Infinity }).next();
+  return value.blob;
 }
 
-export function serializeWishlistEntries(entries) {
-  return serializeRecords(entries, wishlistMetadata, 'Wishlist exceeds backup entry limit');
+// Reads a backup file: a ZIP archive from format 5 on, or a JSON file from earlier
+// versions. Photos in an archive are read later, one at a time, straight from the file.
+export async function readBackupFile(file) {
+  if (!file || typeof file.size !== 'number') throw new Error('Backup file missing');
+
+  if (await isZip(file)) {
+    if (file.size > BACKUP_LIMITS.maxArchiveBytes) throw new Error('Backup file is too large');
+    const archive = await readZip(file);
+    if (!archive.has(BACKUP_DATA_FILE)) throw new Error('Backup data is missing from the archive');
+    if (archive.size(BACKUP_DATA_FILE) > BACKUP_LIMITS.maxDataBytes) throw new Error('Backup data is too large');
+    return { payload: parseBackupText(await archive.text(BACKUP_DATA_FILE)), archive };
+  }
+
+  if (file.size > BACKUP_LIMITS.maxFileBytes) throw new Error('Backup file is too large');
+  return { payload: parseBackupText(await file.text()), archive: null };
 }
 
 export function buildBackupPayload({ items, wishlist }, version) {
@@ -378,12 +433,33 @@ export function hasWishlistSection(payload) {
   return payload?.version >= WISHLIST_BACKUP_VERSION && payload.wishlist !== undefined;
 }
 
-export function validateBackupPayload(payload, expectedVersion) {
+function isCount(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function validatePart(part) {
+  if (
+    !part || typeof part !== 'object'
+    || typeof part.backup !== 'string' || !BACKUP_ID_PATTERN.test(part.backup)
+    || !Number.isInteger(part.number) || part.number < 1
+    || typeof part.last !== 'boolean'
+    || (part.last && !(part.parts === part.number && isCount(part.items) && isCount(part.wishlist)))
+  ) {
+    throw new Error('Backup part information is invalid');
+  }
+}
+
+// `archive` is the opened backup archive from format 5 on, whose photos are files in it.
+export function validateBackupPayload(payload, expectedVersion, archive = null) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Payload is not an object');
   }
   if (!Number.isInteger(payload.version) || payload.version < 1 || payload.version > expectedVersion) {
     throw new Error(`Unsupported backup version: ${payload.version}`);
+  }
+  if (payload.part !== undefined) {
+    if (payload.version < PARTED_BACKUP_VERSION) throw new Error('Backup part information is invalid');
+    validatePart(payload.part);
   }
   if (!Array.isArray(payload.items)) {
     throw new Error('Backup items missing or invalid format');
@@ -393,7 +469,7 @@ export function validateBackupPayload(payload, expectedVersion) {
   }
 
   const itemIds = new Set();
-  payload.items.forEach((item, index) => validateItem(item, index, itemIds));
+  payload.items.forEach((item, index) => validateItem(item, index, itemIds, archive));
 
   if (hasWishlistSection(payload)) {
     if (!Array.isArray(payload.wishlist)) {
@@ -404,21 +480,36 @@ export function validateBackupPayload(payload, expectedVersion) {
     }
 
     const entryIds = new Set();
-    payload.wishlist.forEach((entry, index) => validateWishlistEntry(entry, index, entryIds));
+    payload.wishlist.forEach((entry, index) => validateWishlistEntry(entry, index, entryIds, archive));
   }
 
   return true;
 }
 
-// Decodes the photos of a backup record, in either the `photos` or the older `photo` form.
-function photosFromBackup(record) {
-  return getPhotos(record).map(dataUrl => {
-    const { mimeType, bytes } = decodeImageDataUrl(dataUrl);
-    return new Blob([bytes], { type: mimeType });
-  });
+// Returns the photos of a backup record as Blobs: slices of the archive for format 5, or
+// decoded Data URLs from the `photos` or older `photo` form. An archive photo must start
+// like the image type its name gives, so a backup cannot plant another kind of file.
+async function photosFromBackup(record, archive) {
+  if (!archive) {
+    return getPhotos(record).map(dataUrl => {
+      const { mimeType, bytes } = decodeImageDataUrl(dataUrl);
+      return new Blob([bytes], { type: mimeType });
+    });
+  }
+
+  const photos = [];
+  for (const path of record.photos) {
+    const type = PHOTO_TYPES[path.slice(path.lastIndexOf('.') + 1)];
+    const photo = await archive.file(path, type);
+    if (!hasMatchingImageSignature(type, new Uint8Array(await photo.slice(0, 12).arrayBuffer()))) {
+      throw new Error('Photo type does not match its contents');
+    }
+    photos.push(photo);
+  }
+  return photos;
 }
 
-export async function rehydrateBackupItems(items) {
+export async function rehydrateBackupItems(items, archive = null) {
   return mapWithConcurrency(items, BACKUP_CONCURRENCY, async (item) => {
     const rehydrated = { ...item };
     rehydrated.series = toValueArray(rehydrated.series);
@@ -428,7 +519,7 @@ export async function rehydrateBackupItems(items) {
     if (rehydrated.created_at) rehydrated.created_at = new Date(rehydrated.created_at);
     if (rehydrated.updated_at) rehydrated.updated_at = new Date(rehydrated.updated_at);
 
-    rehydrated.photos = photosFromBackup(item);
+    rehydrated.photos = await photosFromBackup(item, archive);
     delete rehydrated.photo;
 
     return rehydrated;
@@ -437,7 +528,7 @@ export async function rehydrateBackupItems(items) {
 
 // Only known fields are restored. An entry without dates gets the import time, because
 // the wishlist reads entries through the created_at index and would skip it otherwise.
-export async function rehydrateWishlistEntries(entries) {
+export async function rehydrateWishlistEntries(entries, archive = null) {
   return mapWithConcurrency(entries, BACKUP_CONCURRENCY, async (entry) => {
     const createdAt = entry.created_at ? new Date(entry.created_at) : new Date();
     const rehydrated = createWishlistEntry({
@@ -459,19 +550,103 @@ export async function rehydrateWishlistEntries(entries) {
     });
 
     if (entry.id !== undefined) rehydrated.id = entry.id;
-    rehydrated.photos = photosFromBackup(entry);
+    rehydrated.photos = await photosFromBackup(entry, archive);
 
     return rehydrated;
   });
 }
 
-export async function rehydrateBackup(payload) {
+export async function rehydrateBackup(payload, archive = null) {
   return {
-    items: await rehydrateBackupItems(payload.items),
+    items: await rehydrateBackupItems(payload.items, archive),
     wishlist: hasWishlistSection(payload)
-      ? await rehydrateWishlistEntries(payload.wishlist)
+      ? await rehydrateWishlistEntries(payload.wishlist, archive)
       : undefined,
   };
+}
+
+// Opens the files chosen for a restore: one backup file, or every part of a backup saved in
+// parts, in any order. Returns them as `{ payload, archive }`, parts in order. Throws a
+// BackupPartsError when parts are missing or repeated, or come from different backups.
+export async function readBackupFiles(files) {
+  const list = Array.from(files ?? []);
+  if (list.length === 0) throw new Error('Backup file missing');
+
+  const opened = [];
+  for (const file of list) opened.push(await readBackupFile(file));
+
+  const parted = opened.filter(({ payload }) => payload?.part !== undefined);
+  if (parted.length === 0) {
+    if (opened.length > 1) throw new BackupPartsError('severalBackups');
+    return opened;
+  }
+  if (parted.length < opened.length) throw new BackupPartsError('severalBackups');
+
+  parted.forEach(({ payload }) => validatePart(payload.part));
+  if (new Set(parted.map(({ payload }) => payload.part.backup)).size > 1) {
+    throw new BackupPartsError('mixedBackups');
+  }
+
+  const byNumber = new Map();
+  for (const file of parted) {
+    const { number } = file.payload.part;
+    if (byNumber.has(number)) throw new BackupPartsError('repeatedParts', { number });
+    byNumber.set(number, file);
+  }
+
+  const last = parted.find(({ payload }) => payload.part.last);
+  const total = last ? last.payload.part.parts : null;
+  const highest = Math.max(...byNumber.keys());
+  if (total !== null && highest > total) throw new Error('Backup part information is invalid');
+  const missing = [];
+  for (let number = 1; number <= (total ?? highest); number += 1) {
+    if (!byNumber.has(number)) missing.push(number);
+  }
+  if (total === null || missing.length > 0) throw new BackupPartsError('missingParts', { missing, total });
+
+  return [...byNumber.keys()].sort((a, b) => a - b).map(number => byNumber.get(number));
+}
+
+// Checks every file of a restore, and that the parts of a backup add up to the whole: no
+// record twice, and as many records as the last part says.
+export function validateBackupFiles(files, expectedVersion) {
+  files.forEach(({ payload, archive }) => validateBackupPayload(payload, expectedVersion, archive));
+  const last = files.at(-1).payload.part;
+  if (!last) return true;
+
+  const itemIds = new Set();
+  const entryIds = new Set();
+  let items = 0;
+  let wishlist = 0;
+  for (const { payload } of files) {
+    for (const item of payload.items) {
+      if (item.id !== undefined && itemIds.has(item.id)) throw new Error('Backup parts repeat an item');
+      itemIds.add(item.id);
+    }
+    for (const entry of payload.wishlist ?? []) {
+      if (entry.id !== undefined && entryIds.has(entry.id)) throw new Error('Backup parts repeat a wishlist entry');
+      entryIds.add(entry.id);
+    }
+    items += payload.items.length;
+    wishlist += payload.wishlist?.length ?? 0;
+  }
+  if (items !== last.items || wishlist !== last.wishlist) throw new Error('Backup parts do not add up');
+  if (items > BACKUP_LIMITS.maxItems || wishlist > BACKUP_LIMITS.maxItems) {
+    throw new Error('Backup contains too many items');
+  }
+  return true;
+}
+
+// The records of all the files of a restore, in order, ready to store.
+export async function rehydrateBackupFiles(files) {
+  const items = [];
+  let wishlist;
+  for (const { payload, archive } of files) {
+    const part = await rehydrateBackup(payload, archive);
+    items.push(...part.items);
+    if (part.wishlist) wishlist = [...(wishlist ?? []), ...part.wishlist];
+  }
+  return { items, wishlist };
 }
 
 // Replaces the collection, and the wishlist when the backup has one, in one transaction,

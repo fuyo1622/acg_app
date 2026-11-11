@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../contexts/LanguageContext';
 import { handOffAlbumFiles, takeAlbumFiles } from '../utils/albumHandoff';
-import { compressImage } from '../utils/imageUtils';
+import { compressImage, createThumbnail } from '../utils/imageUtils';
 import AlbumImport from './AlbumImport';
 
 const dbMocks = vi.hoisted(() => ({
@@ -19,6 +19,7 @@ vi.mock('../services/db', () => ({
 
 vi.mock('../utils/imageUtils', () => ({
   compressImage: vi.fn(),
+  createThumbnail: vi.fn(),
 }));
 
 function image(name) {
@@ -52,6 +53,7 @@ describe('AlbumImport', () => {
   beforeEach(() => {
     localStorage.setItem('appLang', 'en');
     vi.mocked(compressImage).mockImplementation(file => Promise.resolve(file));
+    vi.mocked(createThumbnail).mockImplementation(photo => Promise.resolve(photo));
     dbMocks.items.bulkAdd.mockResolvedValue(undefined);
     dbMocks.wishlist.bulkAdd.mockResolvedValue(undefined);
     let counter = 0;
@@ -141,12 +143,12 @@ describe('AlbumImport', () => {
     expect(dbMocks.items.bulkAdd).not.toHaveBeenCalled();
   });
 
-  it('refuses more than 30 photos, and files that are not images', async () => {
-    handOffAlbumFiles(Array.from({ length: 31 }, (_, index) => image(`p${index}`)));
+  it('refuses more than 100 photos, and files that are not images', async () => {
+    handOffAlbumFiles(Array.from({ length: 101 }, (_, index) => image(`p${index}`)));
     renderImport();
 
     expect(await screen.findByRole('dialog', { name: 'Something went wrong' }))
-      .toHaveTextContent('Choose up to 30 photos at a time.');
+      .toHaveTextContent('An import holds up to 100 photos.');
     expect(compressImage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
@@ -155,6 +157,67 @@ describe('AlbumImport', () => {
     });
     expect(await screen.findByRole('dialog', { name: 'Something went wrong' }))
       .toHaveTextContent('None of the chosen files is an image.');
+  });
+
+  it('adds photos from another round to the same import, within one limit', async () => {
+    const photos = [image('front'), image('back'), image('box')];
+    handOffAlbumFiles(photos.slice(0, 2));
+    renderImport();
+    await screen.findAllByRole('button', { name: /^Item \d+:/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Item 1: 1 photo(s)' }));
+
+    fireEvent.change(screen.getByLabelText('Album photos'), { target: { files: [photos[2]] } });
+
+    await waitFor(() => {
+      expect(tiles()).toHaveLength(3);
+    });
+    // Tiles and the selection from the first round stay; the new photo joins the end.
+    expect(screen.getByRole('button', { name: 'Item 1: 1 photo(s)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Add photos' })).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText('Album photos'), {
+      target: { files: Array.from({ length: 98 }, (_, index) => image(`p${index}`)) },
+    });
+    expect(await screen.findByRole('dialog', { name: 'Something went wrong' }))
+      .toHaveTextContent('An import holds up to 100 photos, so you can add 97 more.');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(tiles()).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add all (3)' }));
+    await screen.findByText('Collection page, imported 3');
+    const [records] = dbMocks.items.bulkAdd.mock.calls[0];
+    expect(records.map(record => record.photos)).toEqual(photos.map(photo => [photo]));
+  });
+
+  it('stops offering more photos once an import holds 100', async () => {
+    handOffAlbumFiles(Array.from({ length: 100 }, (_, index) => image(`p${index}`)));
+    renderImport();
+
+    expect(await screen.findAllByRole('button', { name: /^Item \d+:/ })).toHaveLength(100);
+    expect(screen.queryByRole('button', { name: 'Add photos' })).not.toBeInTheDocument();
+  });
+
+  it('shows small thumbnails on the tiles but saves the full photos', async () => {
+    const thumbnails = new Map();
+    vi.mocked(createThumbnail).mockImplementation(photo => {
+      const thumbnail = new Blob([`small ${photo.name}`], { type: 'image/jpeg' });
+      thumbnails.set(photo, thumbnail);
+      return Promise.resolve(thumbnail);
+    });
+    const photos = [image('front'), image('back')];
+    handOffAlbumFiles(photos);
+    renderImport();
+    await screen.findAllByRole('button', { name: /^Item \d+:/ });
+
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalledWith(thumbnails.get(photos[0]));
+    });
+    expect(URL.createObjectURL).not.toHaveBeenCalledWith(photos[0]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add all (2)' }));
+    await screen.findByText('Collection page, imported 2');
+    const [records] = dbMocks.items.bulkAdd.mock.calls[0];
+    expect(records.map(record => record.photos)).toEqual([[photos[0]], [photos[1]]]);
   });
 
   it('keeps one item to 10 photos when merging', async () => {

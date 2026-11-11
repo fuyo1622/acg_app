@@ -8,19 +8,35 @@ export const DEFAULT_TYPES = [
   'other'
 ];
 
-// Version 3 added the wishlist section and version 4 several photos per record. Older
-// backups contain only the collection, and at most one photo per record.
-export const BACKUP_VERSION = 4;
+// Version 3 added the wishlist section, version 4 several photos per record, version 5
+// made a backup a ZIP archive with the photos as image files, and version 6 splits a large
+// backup into several such archives, its parts. Older backups are JSON files, contain only
+// the collection before version 3, and at most one photo per record before 4.
+export const BACKUP_VERSION = 6;
 export const WISHLIST_BACKUP_VERSION = 3;
+export const PARTED_BACKUP_VERSION = 6;
+
+// An iPhone reads a whole file into memory to hand it to the share sheet, so a backup is
+// saved in parts of about this size. Photos larger than BACKUP_SHRINK_PHOTO_BYTES are
+// shrunk to the size the app stores new photos at, which keeps the parts few.
+export const BACKUP_PART_BYTES = 200 * 1024 * 1024;
+export const BACKUP_SHRINK_PHOTO_BYTES = 500 * 1024;
 
 export const BACKUP_LIMITS = Object.freeze({
-  maxFileBytes: 50 * 1024 * 1024,
-  maxItems: 2000,
+  // A JSON backup from before version 5 is read into memory whole, an archive is not.
+  maxFileBytes: 200 * 1024 * 1024,
+  maxArchiveBytes: 2 * 1024 * 1024 * 1024,
+  maxDataBytes: 50 * 1024 * 1024,
+  // A collection stored for years can pass a few thousand items; a backup in parts
+  // reads one part at a time, so the records themselves are what this bounds.
+  maxItems: 20000,
   maxValuesPerField: 50,
   maxValueLength: 200,
   maxTypeLength: 100,
   maxNotesLength: 5000,
-  maxPhotoBytes: 10 * 1024 * 1024,
+  // Photos are made smaller for a backup, but one that cannot be is kept as it is,
+  // and a full-size photo from a recent phone camera can pass 10 MB.
+  maxPhotoBytes: 30 * 1024 * 1024,
   maxPhotosPerRecord: 10,
 });
 
@@ -55,5 +71,5 @@ export const WISHLIST_LIMITS = Object.freeze({
 // Each photo chosen for an album import is decoded and re-encoded, so an import is
 // bounded in size and photos are processed two at a time to keep memory use predictable
 // on phones.
-export const ALBUM_IMPORT_LIMIT = 30;
+export const ALBUM_IMPORT_LIMIT = 100;
 export const PHOTO_PROCESSING_CONCURRENCY = 2;

@@ -12,7 +12,7 @@
 熟悉 GitHub 的使用者也可以到
 [GitHub Issues](https://github.com/fuyo1622/acg_app/issues) 建立 issue。
 
-請勿上傳包含私人收藏、備註或照片的 JSON 備份。這個 App 沒有伺服器端資料副本，
+請勿上傳包含私人收藏、備註或照片的備份檔。這個 App 沒有伺服器端資料副本，
 沒有備份時，維護者無法復原瀏覽器內被清除的資料。
 
 ## Usage questions and ordinary bugs
@@ -28,7 +28,7 @@ backup. If the problem continues, use the bilingual
 GitHub users may also open a
 [GitHub issue](https://github.com/fuyo1622/acg_app/issues).
 
-Do not attach JSON backups containing private collection data, notes, or photos. This app
+Do not attach backup files containing private collection data, notes, or photos. This app
 has no server-side copy, so maintainers cannot recover browser data that was cleared
 without a backup.
 

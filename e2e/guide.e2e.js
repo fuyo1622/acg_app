@@ -25,13 +25,13 @@ test('keeps language text clear of the arrow and localizes the user guide', asyn
   );
   await page.getByRole('link', { name: '使用說明' }).click();
   await expect(page.getByRole('heading', { name: '使用說明', level: 1 })).toBeVisible();
-  await expect(page.getByText(/一般 App 更新不需要重新匯出或匯入 JSON/)).toBeVisible();
+  await expect(page.getByText(/一般 App 更新不需要重新匯出或匯入備份/)).toBeVisible();
 
   await page.getByRole('link', { name: '返回收藏' }).first().click();
   await page.locator('#language-select').selectOption('en');
   await page.getByRole('link', { name: 'User guide' }).click();
   await expect(page.getByRole('heading', { name: 'User guide', level: 1 })).toBeVisible();
   await expect(
-    page.getByText(/Normal app updates do not require exporting or importing JSON again/),
+    page.getByText(/Normal app updates do not require exporting or importing a backup again/),
   ).toBeVisible();
 });

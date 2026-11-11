@@ -1,20 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buildBackupPayload,
-  estimateBackupBytes,
-  exceedsBackupSizeLimit,
+  BACKUP_DATA_FILE,
+  createBackupArchive,
   hasWishlistSection,
   mapWithConcurrency,
+  readBackupFile,
   rehydrateBackup,
   rehydrateBackupItems,
   rehydrateWishlistEntries,
   replaceBackupInDb,
-  serializeBackupItems,
-  serializeWishlistEntries,
-  validateBackupFile,
   validateBackupPayload,
 } from './backupUtils';
 import { BACKUP_LIMITS, BACKUP_VERSION } from './constants';
+import { createZip } from './zipUtils';
 
 const validPngDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -90,23 +88,9 @@ describe('validateBackupPayload', () => {
     ]);
   });
 
-  it('serializes multiple series and characters as arrays', async () => {
-    const serialized = await serializeBackupItems([{
-      id: 1,
-      series: ['Evangelion', 'Rebuild of Evangelion'],
-      character: ['Asuka', 'Rei'],
-      merchandise_type: 'figure',
-    }]);
-
-    expect(serialized[0]).toEqual(expect.objectContaining({
-      series: ['Evangelion', 'Rebuild of Evangelion'],
-      character: ['Asuka', 'Rei'],
-    }));
-  });
-
-  it('rejects files, item counts and field values that exceed import limits', () => {
-    expect(() => validateBackupFile({ size: BACKUP_LIMITS.maxFileBytes + 1 }))
-      .toThrow('too large');
+  it('rejects files, item counts and field values that exceed import limits', async () => {
+    const hugeJson = { size: BACKUP_LIMITS.maxFileBytes + 1, slice: () => new Blob(['{"version":4']) };
+    await expect(readBackupFile(hugeJson)).rejects.toThrow('too large');
 
     const tooManyItems = {
       version: BACKUP_VERSION,
@@ -181,20 +165,6 @@ describe('validateBackupPayload', () => {
     expect(() => validateBackupPayload(withPhotos(validPngDataUrl), BACKUP_VERSION)).toThrow('invalid photos');
     expect(() => validateBackupPayload(withPhotos([7]), BACKUP_VERSION)).toThrow('invalid photo Data URL');
     expect(() => validateBackupPayload(withPhotos(['bad-data']), BACKUP_VERSION)).toThrow('invalid photo Data URL');
-  });
-
-  it('serializes every photo of a record, and the photo of a record from before version 4', async () => {
-    const png = new Blob([Uint8Array.from(atob('iVBORw0KGgo='), character => character.charCodeAt(0))], {
-      type: 'image/png',
-    });
-    const [current, legacy] = await serializeBackupItems([
-      { id: 1, series: ['A'], merchandise_type: 'figure', photos: [png, png] },
-      { id: 2, series: ['B'], merchandise_type: 'figure', photo: png },
-    ]);
-
-    expect(current.photos).toEqual([validPngDataUrl, validPngDataUrl]);
-    expect(legacy.photos).toEqual([validPngDataUrl]);
-    expect(legacy).not.toHaveProperty('photo');
   });
 
   it('limits mapper concurrency while preserving result order', async () => {
@@ -310,7 +280,7 @@ describe('wishlist backups', () => {
       .toThrow('Wishlist entry at index 1 has a duplicate id');
   });
 
-  it('round-trips entries, photos and links through serialization', async () => {
+  it('round-trips entries, photos and links through a backup archive', async () => {
     const photo = new Blob([Uint8Array.from(atob('iVBORw0KGgo='), character => character.charCodeAt(0))], {
       type: 'image/png',
     });
@@ -321,21 +291,20 @@ describe('wishlist backups', () => {
       updated_at: new Date('2026-09-02T00:00:00.000Z'),
     };
 
-    const [serialized] = await serializeWishlistEntries([stored]);
-    expect(serialized).toEqual(expect.objectContaining({
+    const archiveBlob = await createBackupArchive({ items: [], wishlist: [stored] });
+    const { payload: backup, archive } = await readBackupFile(new File([archiveBlob], 'acg-backup.zip'));
+    expect(backup.wishlist[0]).toEqual(expect.objectContaining({
       name: 'Asuka figure',
       links: [{ url: 'https://www.amiami.com/item', label: 'AmiAmi' }],
       price: 12800,
       currency: 'JPY',
       order_deadline: '2026-10-15',
       created_at: '2026-09-01T00:00:00.000Z',
-      photos: [validPngDataUrl, validPngDataUrl],
+      photos: ['photos/wishlist/0001-1.png', 'photos/wishlist/0001-2.png'],
     }));
+    expect(validateBackupPayload(backup, BACKUP_VERSION, archive)).toBe(true);
 
-    const backup = buildBackupPayload({ items: [], wishlist: [serialized] }, BACKUP_VERSION);
-    expect(validateBackupPayload(JSON.parse(JSON.stringify(backup)), BACKUP_VERSION)).toBe(true);
-
-    const [restored] = await rehydrateWishlistEntries([serialized]);
+    const [restored] = await rehydrateWishlistEntries(backup.wishlist, archive);
     expect(restored).toEqual(expect.objectContaining({
       id: 1,
       name: 'Asuka figure',
@@ -384,56 +353,106 @@ describe('wishlist backups', () => {
   });
 });
 
-describe('backup size estimation', () => {
-  function itemWithPhoto(photoBytes) {
-    const photo = new Blob(['photo'], { type: 'image/webp' });
-    Object.defineProperty(photo, 'size', { value: photoBytes });
-    return { id: 1, series: ['Series'], character: ['Character'], merchandise_type: 'figure', photo };
+describe('backup archives (format 5)', () => {
+  const pngBytes = () => Uint8Array.from(atob('iVBORw0KGgo='), character => character.charCodeAt(0));
+  const png = () => new Blob([pngBytes()], { type: 'image/png' });
+  const gif = () => new Blob(['GIF89a01'], { type: 'image/gif' });
+
+  async function roundTrip(sections) {
+    const archive = await createBackupArchive(sections);
+    return readBackupFile(new File([archive], 'acg-backup.zip', { type: 'application/zip' }));
   }
 
-  it('returns zero for missing or empty sections', () => {
-    expect(estimateBackupBytes()).toBe(0);
-    expect(estimateBackupBytes({ items: [], wishlist: [] })).toBe(0);
+  it('stores the records in backup.json and each photo as an image file', async () => {
+    const { payload, archive } = await roundTrip({
+      items: [
+        { id: 1, series: ['Evangelion', 'Rebuild'], character: ['Asuka', 'Rei'], merchandise_type: 'figure', notes: '盒損', photos: [png(), gif()] },
+        { id: 2, series: ['B'], merchandise_type: 'figure', photo: png() },
+      ],
+      wishlist: [{ id: 3, name: 'Rei plush', links: [], photos: [png()] }],
+    });
+
+    expect(payload.version).toBe(BACKUP_VERSION);
+    expect(archive.names[0]).toBe(BACKUP_DATA_FILE);
+    expect(payload.items[0]).toEqual(expect.objectContaining({
+      series: ['Evangelion', 'Rebuild'],
+      character: ['Asuka', 'Rei'],
+      notes: '盒損',
+      photos: ['photos/items/0001-1.png', 'photos/items/0001-2.gif'],
+    }));
+    // A record from before version 4 keeps its single photo as the first of its photos.
+    expect(payload.items[1].photos).toEqual(['photos/items/0002-1.png']);
+    expect(payload.items[1]).not.toHaveProperty('photo');
+    expect(payload.wishlist[0].photos).toEqual(['photos/wishlist/0001-1.png']);
+    expect(archive.size('photos/items/0001-2.gif')).toBe(8);
   });
 
-  it('counts Base64 expansion of photos', () => {
-    const withoutPhoto = estimateBackupBytes({ items: [{ ...itemWithPhoto(0), photo: null }] });
-    const withPhoto = estimateBackupBytes({ items: [itemWithPhoto(3 * 1024 * 1024)] });
+  it('round-trips collection and wishlist photos in order', async () => {
+    const { payload, archive } = await roundTrip({
+      items: [{ id: 1, series: ['A'], merchandise_type: 'figure', photos: [png(), gif()] }],
+      wishlist: [{ id: 2, name: 'Rei plush', links: [], photos: [gif()] }],
+    });
+    expect(validateBackupPayload(payload, BACKUP_VERSION, archive)).toBe(true);
 
-    expect(withPhoto - withoutPhoto).toBeGreaterThan(4 * 1024 * 1024);
+    const restored = await rehydrateBackup(payload, archive);
+    expect(restored.items[0].photos.map(photo => photo.type)).toEqual(['image/png', 'image/gif']);
+    expect(new Uint8Array(await restored.items[0].photos[0].arrayBuffer())).toEqual(pngBytes());
+    expect(restored.wishlist[0]).toEqual(expect.objectContaining({ id: 2, name: 'Rei plush' }));
+    expect(await restored.wishlist[0].photos[0].text()).toBe('GIF89a01');
   });
 
-  it('counts every photo of a record', () => {
-    const { photo } = itemWithPhoto(3 * 1024 * 1024);
-    const onePhoto = estimateBackupBytes({ items: [{ ...itemWithPhoto(0), photo: null, photos: [photo] }] });
-    const twoPhotos = estimateBackupBytes({ items: [{ ...itemWithPhoto(0), photo: null, photos: [photo, photo] }] });
+  it('refuses a photo whose contents do not match its file type', async () => {
+    const archive = await createZip([
+      {
+        name: BACKUP_DATA_FILE,
+        data: JSON.stringify({ version: 5, items: [{ series: ['A'], photos: ['photos/items/0001-1.png'] }] }),
+      },
+      { name: 'photos/items/0001-1.png', data: '<script>alert(1)</script>' },
+    ]);
+    const { payload, archive: opened } = await readBackupFile(new File([archive], 'planted.zip'));
 
-    expect(twoPhotos - onePhoto).toBeGreaterThan(4 * 1024 * 1024);
+    expect(validateBackupPayload(payload, BACKUP_VERSION, opened)).toBe(true);
+    await expect(rehydrateBackup(payload, opened)).rejects.toThrow('Photo type does not match its contents');
   });
 
-  it('counts multi-byte notes as their encoded length', () => {
-    const ascii = estimateBackupBytes({ items: [{ series: ['S'], notes: 'aaa' }] });
-    const chinese = estimateBackupBytes({ items: [{ series: ['S'], notes: '公仔盒' }] });
+  it('refuses photos that are missing from the archive or outside its photos folder', async () => {
+    const archive = await createZip([
+      { name: BACKUP_DATA_FILE, data: '{}' },
+      { name: 'photos/items/0001-1.png', data: png() },
+      { name: 'notes.png', data: png() },
+    ]);
+    const { archive: opened } = await readBackupFile(new File([archive], 'backup.zip'));
+    const withPhotos = photos => ({ version: 5, items: [{ series: ['A'], photos }] });
 
-    expect(chinese).toBe(ascii + 6);
+    expect(validateBackupPayload(withPhotos(['photos/items/0001-1.png']), BACKUP_VERSION, opened)).toBe(true);
+    expect(() => validateBackupPayload(withPhotos(['photos/items/0002-1.png']), BACKUP_VERSION, opened))
+      .toThrow('refers to a missing photo');
+    expect(() => validateBackupPayload(withPhotos(['notes.png']), BACKUP_VERSION, opened))
+      .toThrow('refers to a missing photo');
+    expect(() => validateBackupPayload(withPhotos(['data:image/png;base64,iVBORw0KGgo=']), BACKUP_VERSION, opened))
+      .toThrow('refers to a missing photo');
   });
 
-  it('reports collections that would exceed the import file limit', () => {
-    const smallCollection = { items: [itemWithPhoto(1024)] };
-    const largeCollection = {
-      items: Array.from({ length: 8 }, () => itemWithPhoto(8 * 1024 * 1024)),
-    };
+  it('refuses an archive without its backup data', async () => {
+    const archive = await createZip([{ name: 'photos/items/0001-1.png', data: png() }]);
 
-    expect(exceedsBackupSizeLimit(smallCollection)).toBe(false);
-    expect(estimateBackupBytes(largeCollection)).toBeGreaterThan(BACKUP_LIMITS.maxFileBytes);
-    expect(exceedsBackupSizeLimit(largeCollection)).toBe(true);
+    await expect(readBackupFile(new File([archive], 'backup.zip'))).rejects.toThrow('Backup data is missing');
   });
 
-  it('counts wishlist screenshots toward the same file limit', () => {
-    const screenshots = Array.from({ length: 5 }, () => itemWithPhoto(8 * 1024 * 1024));
-    const collection = Array.from({ length: 4 }, () => itemWithPhoto(8 * 1024 * 1024));
+  it('will not write a photo type that it could not restore', async () => {
+    const heic = new Blob(['heic'], { type: 'image/heic' });
 
-    expect(exceedsBackupSizeLimit({ items: collection })).toBe(false);
-    expect(exceedsBackupSizeLimit({ items: collection, wishlist: screenshots })).toBe(true);
+    await expect(createBackupArchive({ items: [{ id: 1, series: ['A'], photos: [heic] }], wishlist: [] }))
+      .rejects.toThrow('Unsupported photo type: image/heic');
+  });
+
+  it('still reads a JSON backup from an earlier version', async () => {
+    const json = JSON.stringify({ version: 4, items: [{ series: ['A'], photos: [validPngDataUrl] }], wishlist: [] });
+    const { payload, archive } = await readBackupFile(new File([json], 'acg-backup.json', { type: 'application/json' }));
+
+    expect(archive).toBeNull();
+    expect(validateBackupPayload(payload, BACKUP_VERSION, archive)).toBe(true);
+    const restored = await rehydrateBackup(payload, archive);
+    expect(restored.items[0].photos[0].type).toBe('image/png');
   });
 });

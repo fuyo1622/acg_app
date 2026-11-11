@@ -47,7 +47,13 @@ export default function PhotoGallery({ photos, alt, expandable = false }) {
       </div>
 
       {photos.length > 1 && (
-        <div className="photo-gallery-thumbs" role="group" aria-label={t('photoCount', { count: photos.length })}>
+        // The strip scrolls sideways, so a swipe on it scrolls instead of changing records.
+        <div
+          className="photo-gallery-thumbs"
+          role="group"
+          aria-label={t('photoCount', { count: photos.length })}
+          data-swipe-ignore
+        >
           {photos.map((photo, position) => (
             <button
               key={position}

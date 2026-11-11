@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../services/db';
 import { ArrowLeft, Camera, PackageCheck, Save, Trash2 } from 'lucide-react';
@@ -20,6 +20,7 @@ import './AddEditItem.css';
 // item: the id is the entry's, and saving adds the item and removes the entry.
 export default function AddEditItem({ mode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { t, lang } = useLanguage();
   const isMoving = mode === 'move';
@@ -47,6 +48,9 @@ export default function AddEditItem({ mode }) {
   let exitPath = '/';
   if (isMoving) exitPath = `/wishlist/item/${id}`;
   else if (isEditing) exitPath = `/item/${id}`;
+  // The item page's list order, handed back so moving between items still follows it.
+  const returnState = isEditing && Array.isArray(location.state?.order) ? { order: location.state.order } : null;
+  const leave = () => (returnState ? navigate(exitPath, { state: returnState }) : navigate(exitPath));
 
   // Fetch all items for autocomplete
   const allItems = useLiveQuery(() => db.items.toArray());
@@ -168,7 +172,7 @@ export default function AddEditItem({ mode }) {
         await db.items.add(itemData);
       }
 
-      navigate(destination, { replace: true });
+      navigate(destination, returnState ? { replace: true, state: returnState } : { replace: true });
     } catch (error) {
       console.error("Error saving item:", error);
       setNotice({ title: t('errorTitle'), message: t('saveError') });
@@ -209,7 +213,7 @@ export default function AddEditItem({ mode }) {
 
   const header = (
     <header className="page-header">
-      <button className="back-btn" onClick={() => navigate(exitPath)} aria-label={t('cancel')} disabled={isSaving}>
+      <button className="back-btn" onClick={leave} aria-label={t('cancel')} disabled={isSaving}>
         <ArrowLeft size={24} />
       </button>
       <h2>{title}</h2>
@@ -347,7 +351,7 @@ export default function AddEditItem({ mode }) {
         </div>
 
         <div className="form-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(exitPath)} disabled={isSaving}>
+          <button type="button" className="btn btn-secondary" onClick={leave} disabled={isSaving}>
             {t('cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={isSaving}>
