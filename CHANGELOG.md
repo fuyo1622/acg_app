@@ -6,6 +6,8 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-11
+
 ### Fixed
 
 - On a phone, the cards of a page seen for the first time stayed empty for half a minute
