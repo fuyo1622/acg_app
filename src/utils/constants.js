@@ -27,12 +27,16 @@ export const BACKUP_LIMITS = Object.freeze({
   maxFileBytes: 200 * 1024 * 1024,
   maxArchiveBytes: 2 * 1024 * 1024 * 1024,
   maxDataBytes: 50 * 1024 * 1024,
-  maxItems: 2000,
+  // A collection stored for years can pass a few thousand items; a backup in parts
+  // reads one part at a time, so the records themselves are what this bounds.
+  maxItems: 20000,
   maxValuesPerField: 50,
   maxValueLength: 200,
   maxTypeLength: 100,
   maxNotesLength: 5000,
-  maxPhotoBytes: 10 * 1024 * 1024,
+  // Photos are made smaller for a backup, but one that cannot be is kept as it is,
+  // and a full-size photo from a recent phone camera can pass 10 MB.
+  maxPhotoBytes: 30 * 1024 * 1024,
   maxPhotosPerRecord: 10,
 });
 

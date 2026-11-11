@@ -182,6 +182,27 @@ describe('backups in parts (format 6)', () => {
       .toThrow('Backup part information is invalid');
   });
 
+  it('keeps a photo that could not be made smaller, even one over 10 MB', async () => {
+    const fullSize = photoOfSize(12 * 1024 * 1024);
+    const files = asFiles(await collectParts({ items: [item(1, fullSize)], wishlist: [] }, {
+      preparePhoto: async photo => photo,
+    }));
+
+    const opened = await readBackupFiles(files);
+    expect(validateBackupFiles(opened, BACKUP_VERSION)).toBe(true);
+    const [restored] = (await rehydrateBackupFiles(opened)).items;
+    expect(restored.photos[0].size).toBe(12 * 1024 * 1024);
+  });
+
+  it('backs up and restores a collection of more than 2,000 items', async () => {
+    const items = Array.from({ length: 2500 }, (_, index) => item(index + 1));
+    const files = asFiles(await collectParts({ items, wishlist: [] }));
+
+    const opened = await readBackupFiles(files);
+    expect(validateBackupFiles(opened, BACKUP_VERSION)).toBe(true);
+    expect((await rehydrateBackupFiles(opened)).items).toHaveLength(2500);
+  });
+
   it('still restores one backup file made before parts existed', async () => {
     const oldArchive = await handMadePart({ version: 5, items: [item(1)], wishlist: [] });
 

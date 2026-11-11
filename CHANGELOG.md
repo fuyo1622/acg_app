@@ -15,8 +15,10 @@ for published releases.
   did a photo over 10 MB. A large backup now comes in files of about 200 MB, made and
   saved one at a time, and the photos in it over 500 KB are made smaller, at most 1600 px
   on the longest side, the size new photos are stored at. To restore it, choose all of its
-  files at once; the app says which are missing. A backup that fits in one file works as
-  before, and older backups still import.
+  files at once; the app says which are missing. A photo that cannot be made smaller is
+  kept as it is, up to 30 MB, and a backup holds up to 20,000 items and as many wishlist
+  entries, where it used to stop at 2,000. A backup that fits in one file works as before,
+  and older backups still import.
 - On iPhone, new photos were stored at full size, because Safari cannot make the WebP
   copies the app asked for. Where WebP cannot be made, photos are now compressed as JPEG.
 
