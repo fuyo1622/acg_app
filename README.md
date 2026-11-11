@@ -111,8 +111,8 @@ install its browsers with `npx playwright install chromium webkit`.
 - Backup format 6 is a set of parts: ZIP archives that each hold whole records, their
   photos, and a `backup.json` naming the backup and the part. The last part gives the
   number of parts and records, so a restore refuses an incomplete set and names the
-  missing parts. Photos are compressed to WebP, or to JPEG where the browser cannot make
-  WebP, as Safari cannot.
+  missing parts, and it holds the order of the lists (`terms`). Photos are compressed to
+  WebP, or to JPEG where the browser cannot make WebP, as Safari cannot.
 - Backup import replaces the current collection and wishlist after confirmation and
   saves a safety backup first when either is not empty. A backup made before version
   0.4.0 holds only the collection, so importing it keeps the current wishlist. Backups
