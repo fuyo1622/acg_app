@@ -56,7 +56,11 @@ function inTurn(task, signal) {
 
 // The image to show on a record's card: its small copy, or the cover itself when the cover
 // is already small. Null if the card left the screen first.
-export async function getCardImage(storeName, record, cover, signal) {
+//
+// Making a copy takes a moment per photo and the cards take turns, so a page of 50 cards
+// seen for the first time stayed empty for half a minute or more. When the copy has to be
+// made, `onWait` is called first, so the card can show the photo itself meanwhile.
+export async function getCardImage(storeName, record, cover, { signal, onWait } = {}) {
   const key = `${storeName}:${record.id}`;
   const signature = signatureOf(record, cover);
 
@@ -69,6 +73,8 @@ export async function getCardImage(storeName, record, cover, signal) {
     return stored.blob;
   }
 
+  if (signal?.aborted) return null;
+  onWait?.();
   const image = await inTurn(() => createThumbnail(cover, CARD_THUMBNAIL_SIZE), signal);
   if (!image) return null;
 
