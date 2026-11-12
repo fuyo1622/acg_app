@@ -149,14 +149,32 @@ describe('card thumbnails', () => {
     expect(order).toEqual(covers);
   });
 
+  it('says when a copy has to be made, before making it, so the card can show the photo meanwhile', async () => {
+    const onWait = vi.fn();
+    const first = await openApp();
+
+    expect(await first.getCardImage('items', record(), cover, { onWait })).toBe(small);
+    expect(onWait).toHaveBeenCalledTimes(1);
+    expect(onWait.mock.invocationCallOrder[0]).toBeLessThan(mocks.createThumbnail.mock.invocationCallOrder[0]);
+
+    // A copy made before, in memory or stored, is shown at once.
+    await first.getCardImage('items', record(), cover, { onWait });
+    vi.resetModules();
+    const second = await openApp();
+    await second.getCardImage('items', record(), cover, { onWait });
+    expect(onWait).toHaveBeenCalledTimes(1);
+  });
+
   it('skips the work for a card that has left the screen', async () => {
     const controller = new AbortController();
+    const onWait = vi.fn();
     const { getCardImage } = await openApp();
 
-    const pending = getCardImage('items', record(), cover, controller.signal);
+    const pending = getCardImage('items', record(), cover, { signal: controller.signal, onWait });
     controller.abort();
 
     expect(await pending).toBeNull();
+    expect(onWait).not.toHaveBeenCalled();
     expect(mocks.createThumbnail).not.toHaveBeenCalled();
     expect(mocks.stored.size).toBe(0);
   });

@@ -106,7 +106,8 @@ install its browsers with `npx playwright install chromium webkit`.
   `DB_SCHEMA_VERSION` in `src/services/db.js`; every schema change must add a tested
   Dexie migration and increment that value.
 - List cards show small copies of the photos, kept in a separate `acg-thumbnails` IndexedDB
-  database. It is a cache that can always be rebuilt, so backups leave it out.
+  database; until a photo's copy is made, its card shows the photo itself. The database is a
+  cache that can always be rebuilt, so backups leave it out.
 - No account, backend, cloud sync, or server-side copy of collection or wishlist data.
 - Backup format 6 is a set of parts: ZIP archives that each hold whole records, their
   photos, and a `backup.json` naming the backup and the part. The last part gives the

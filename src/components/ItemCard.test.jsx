@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { StrictMode } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../contexts/LanguageContext';
@@ -92,12 +92,39 @@ describe('ItemCard', () => {
     renderCard(item);
 
     expect(await screen.findByRole('img', { name: 'Asuka' })).toHaveAttribute('src', 'blob:card');
-    expect(getCardImage).toHaveBeenCalledWith('items', item, photos[0], expect.any(AbortSignal));
+    expect(getCardImage).toHaveBeenCalledWith('items', item, photos[0], expect.objectContaining({
+      signal: expect.any(AbortSignal),
+    }));
     // Compared by identity: to the matchers, any two Blobs look equal.
     expect(vi.mocked(URL.createObjectURL).mock.calls.map(([blob]) => blob)).toEqual([expect.any(Blob)]);
     expect(vi.mocked(URL.createObjectURL).mock.calls[0][0]).toBe(smallCopy);
     expect(screen.getByRole('img', { name: '2 photos' })).toHaveTextContent('2');
     expect(screen.queryByText('Needs details')).not.toBeInTheDocument();
+  });
+
+  it('shows the photo itself while its small copy is made, then the copy in the same image', async () => {
+    const photo = new Blob(['full size'], { type: 'image/jpeg' });
+    vi.mocked(URL.createObjectURL).mockImplementation(blob => (blob === smallCopy ? 'blob:small' : 'blob:photo'));
+    let finishCopy;
+    vi.mocked(getCardImage).mockImplementation((storeName, record, cover, { onWait }) => {
+      onWait();
+      return new Promise((resolve) => {
+        finishCopy = () => resolve(smallCopy);
+      });
+    });
+    renderCard({ id: 10, series: ['Gundam'], photos: [photo] });
+
+    const image = await screen.findByRole('img', { name: 'Gundam' });
+    expect(image).toHaveAttribute('src', 'blob:photo');
+    expect(vi.mocked(URL.createObjectURL).mock.calls[0][0]).toBe(photo);
+
+    const removeSource = vi.spyOn(image, 'removeAttribute');
+    finishCopy();
+
+    await waitFor(() => expect(image).toHaveAttribute('src', 'blob:small'));
+    expect(screen.getByRole('img', { name: 'Gundam' })).toBe(image);
+    // Swapped in place: the photo stays on screen until the copy replaces it.
+    expect(removeSource).not.toHaveBeenCalled();
   });
 
   it('keeps its image through the extra mount React does in development', async () => {
@@ -127,7 +154,7 @@ describe('ItemCard', () => {
   it('stops waiting for its small copy once it leaves the screen', () => {
     vi.mocked(getCardImage).mockReturnValue(new Promise(() => {}));
     const { unmount } = renderCard({ id: 7, series: ['Gundam'], photos: [new Blob(['photo'], { type: 'image/png' })] });
-    const [, , , signal] = vi.mocked(getCardImage).mock.calls[0];
+    const [, , , { signal }] = vi.mocked(getCardImage).mock.calls[0];
 
     expect(signal.aborted).toBe(false);
     expect(screen.queryByRole('img', { name: 'Gundam' })).not.toBeInTheDocument();
