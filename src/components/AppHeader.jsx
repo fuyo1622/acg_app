@@ -13,7 +13,12 @@ import {
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
 import AppDialog from './AppDialog';
-import { BACKUP_PART_BYTES, BACKUP_VERSION } from '../utils/constants';
+import {
+  BACKUP_MIN_PART_BYTES,
+  BACKUP_PART_BYTES,
+  BACKUP_SHARE_PART_BYTES,
+  BACKUP_VERSION,
+} from '../utils/constants';
 import {
   BackupPartsError,
   createBackupParts,
@@ -52,8 +57,12 @@ function isAppleMobile() {
 
 // An iPhone or iPad does not reliably keep a file downloaded from a home-screen app, so
 // there a backup goes through the share sheet, where Save to Files keeps it.
+function usesShareSheet() {
+  return isAppleMobile() && typeof navigator.share === 'function';
+}
+
 function canShareFile(file) {
-  if (!isAppleMobile() || typeof navigator.share !== 'function') return false;
+  if (!usesShareSheet()) return false;
   try {
     return typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] });
   } catch {
@@ -61,23 +70,33 @@ function canShareFile(file) {
   }
 }
 
-// Call it straight from a tap: the share sheet opens only for one. Where sharing this kind
-// of file is refused, the file downloads instead.
+// Safari reads the whole file into memory before the share sheet opens. When it cannot, or
+// the sheet cannot open, it reports an AbortError, as when a person closes the sheet, but
+// at once and without showing it. Nobody opens the sheet and closes it again this fast.
+const SHARE_FAILED_WITHIN_MS = 1500;
+
+// Call it straight from a tap: the share sheet opens only for one. The result is `shared`,
+// `cancelled` (closed without saving), `failed` (with the `error`), or `downloaded` where
+// sharing this kind of file is refused and it downloads instead.
 async function shareFile(file) {
+  const startedAt = Date.now();
   try {
     await navigator.share({ files: [file] });
-    return 'shared';
+    return { outcome: 'shared' };
   } catch (error) {
-    if (error?.name === 'AbortError') return 'cancelled';
+    if (error?.name === 'AbortError') {
+      const failed = /read/i.test(error.message ?? '') || Date.now() - startedAt < SHARE_FAILED_WITHIN_MS;
+      return failed ? { outcome: 'failed', error } : { outcome: 'cancelled' };
+    }
     downloadFile(file);
-    return 'downloaded';
+    return { outcome: 'downloaded' };
   }
 }
 
 async function saveBackupFile(file) {
   if (canShareFile(file)) return shareFile(file);
   downloadFile(file);
-  return 'downloaded';
+  return { outcome: 'downloaded' };
 }
 
 async function readBackupSections() {
@@ -85,17 +104,24 @@ async function readBackupSections() {
   return { items, wishlist };
 }
 
-// Tests set this to get several parts out of a few small photos.
+// Tests set these to get several parts, and smaller ones, out of a few small photos.
 const TEST_PART_BYTES_KEY = 'acgBackupPartBytes';
+const TEST_MIN_PART_BYTES_KEY = 'acgBackupMinPartBytes';
 
-function backupPartBytes() {
+function sizeSetting(testKey, fallback) {
   try {
-    const override = Number(sessionStorage.getItem(TEST_PART_BYTES_KEY));
-    return override > 0 ? override : BACKUP_PART_BYTES;
+    const override = Number(sessionStorage.getItem(testKey));
+    return override > 0 ? override : fallback;
   } catch {
-    return BACKUP_PART_BYTES;
+    return fallback;
   }
 }
+
+const backupPartBytes = () => sizeSetting(
+  TEST_PART_BYTES_KEY,
+  usesShareSheet() ? BACKUP_SHARE_PART_BYTES : BACKUP_PART_BYTES,
+);
+const minimumPartBytes = () => sizeSetting(TEST_MIN_PART_BYTES_KEY, BACKUP_MIN_PART_BYTES);
 
 function countPhotos({ items, wishlist }) {
   return [...items, ...wishlist].reduce((total, record) => total + getPhotos(record).length, 0);
@@ -207,10 +233,11 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   // so only one file's photos are held at once.
   const startBackupJob = (sections, { prefix, purpose, importData = null }) => {
     endBackupJob();
-    const job = { prefix, purpose, importData, saved: 0, names: [], photos: countPhotos(sections) };
+    const partBytes = backupPartBytes();
+    const job = { prefix, purpose, importData, partBytes, saved: 0, names: [], photos: countPhotos(sections) };
     let photosDone = 0;
     job.parts = createBackupParts(sections, {
-      partBytes: backupPartBytes(),
+      partBytes,
       preparePhoto: shrinkPhotoForBackup,
       onPhotoDone: () => {
         photosDone += 1;
@@ -221,13 +248,14 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     return job;
   };
 
-  // The job's next file, or null when the job was stopped in the meantime.
-  const prepareNextPart = async (job) => {
+  // The job's next file, or null when the job was stopped in the meantime. With
+  // `{ partBytes }`, the file just offered is made again as files of that size instead.
+  const prepareNextPart = async (job, request) => {
     setProgress(current => ({ part: job.saved + 1, done: current?.done ?? 0, total: job.photos }));
     keepScreenOn();
     setIsProcessing(true);
     try {
-      const { value, done } = await job.parts.next();
+      const { value, done } = await job.parts.next(request);
       if (done || backupJobRef.current !== job) return null;
       const file = new File([value.blob], backupFileName(job.prefix, value), { type: 'application/zip' });
       return { number: value.number, last: value.last, purpose: job.purpose, file };
@@ -286,6 +314,36 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
+  // The share sheet could not take the file: its records are made again as files of half
+  // the size, and the files after them keep that size. Below the smallest size the backup
+  // stops and says why, rather than offer a file that cannot be saved.
+  const offerSmallerPart = async (job, part, error) => {
+    const partBytes = Math.floor(job.partBytes / 2);
+    if (partBytes < minimumPartBytes()) {
+      endBackupJob();
+      setNotice({
+        title: t('backupShareFailedTitle'),
+        message: t('backupShareFailedMessage', { reason: `${error?.name ?? 'Error'}: ${error?.message ?? ''}` }),
+      });
+      return;
+    }
+    job.partBytes = partBytes;
+    const next = await prepareNextPart(job, { partBytes });
+    if (next) setReadyPart({ ...next, madeSmaller: next.file.size < part.file.size });
+  };
+
+  // After the share sheet or a download took a file of the job (or could not).
+  const afterSaving = async (job, part, { outcome, error }) => {
+    try {
+      if (outcome === 'failed') await offerSmallerPart(job, part, error);
+      else await continueBackupJob(job, part, outcome);
+    } catch (caught) {
+      console.error(caught);
+      endBackupJob();
+      showError(job.purpose === 'safety' ? 'importError' : 'exportError');
+    }
+  };
+
   const saveReadyPart = async () => {
     const part = readyPart;
     const job = backupJobRef.current;
@@ -293,20 +351,14 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     if (!part || !job) return;
 
     const result = await saveBackupFile(part.file);
-    if (result === 'cancelled') {
+    if (result.outcome === 'cancelled') {
       // A backup in several files is no use without all of them, so the same file is
       // offered again; stopping is a choice of its own.
       if (isSingleFile(part)) endBackupJob();
-      else setReadyPart(part);
+      else setReadyPart({ ...part, madeSmaller: false });
       return;
     }
-    try {
-      await continueBackupJob(job, part, result);
-    } catch (error) {
-      console.error(error);
-      endBackupJob();
-      showError(job.purpose === 'safety' ? 'importError' : 'exportError');
-    }
+    await afterSaving(job, part, result);
   };
 
   const stopBackupJob = () => {
@@ -379,18 +431,12 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     // The current data is replaced only once its safety backup is kept, or once the user
     // says to go on without it.
     const result = await saveBackupFile(safetyPart.file);
-    if (result === 'cancelled') {
+    if (result.outcome === 'cancelled') {
       endBackupJob();
       setUnsavedSafetyImport(importData);
       return;
     }
-    try {
-      await continueBackupJob(job, safetyPart, result);
-    } catch (error) {
-      console.error(error);
-      endBackupJob();
-      showError('importError');
-    }
+    await afterSaving(job, safetyPart, result);
   };
 
   const cancelImport = () => {
@@ -459,14 +505,15 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
       name: readyPart.file.name,
       size: formatBytes(readyPart.file.size, storageLocale),
     };
+    // Chinese sentences follow each other without a space.
+    const sentences = (...keys) => keys.map(key => t(key, values)).join(lang === 'en' ? ' ' : '');
+    const smaller = readyPart.madeSmaller ? ['backupMadeSmaller'] : [];
     if (isSingleFile(readyPart)) {
-      return { title: t('exportReadyTitle'), message: t('exportReadyMessage', values) };
+      return { title: t('exportReadyTitle'), message: sentences(...smaller, 'exportReadyMessage') };
     }
     return {
       title: t(readyPart.purpose === 'safety' ? 'safetyPartReadyTitle' : 'exportPartReadyTitle', values),
-      // Chinese sentences follow each other without a space.
-      message: [t('exportPartReadyMessage', values), t(readyPart.last ? 'exportPartReadyLast' : 'exportPartReadyNext')]
-        .join(lang === 'en' ? ' ' : ''),
+      message: sentences(...smaller, 'exportPartReadyMessage', readyPart.last ? 'exportPartReadyLast' : 'exportPartReadyNext'),
     };
   })();
 
