@@ -100,8 +100,8 @@ async function saveBackupFile(file) {
 }
 
 async function readBackupSections() {
-  const [items, wishlist] = await Promise.all([db.items.toArray(), db.wishlist.toArray()]);
-  return { items, wishlist };
+  const [items, wishlist, terms] = await Promise.all([db.items.toArray(), db.wishlist.toArray(), db.terms.toArray()]);
+  return { items, wishlist, terms };
 }
 
 // Tests set these to get several parts, and smaller ones, out of a few small photos.

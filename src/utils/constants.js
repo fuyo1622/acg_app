@@ -43,6 +43,7 @@ export const BACKUP_LIMITS = Object.freeze({
   // and a full-size photo from a recent phone camera can pass 10 MB.
   maxPhotoBytes: 30 * 1024 * 1024,
   maxPhotosPerRecord: 10,
+  maxTermsPerField: 5000,
 });
 
 export const BACKUP_CONCURRENCY = 4;

@@ -294,6 +294,40 @@ describe('backups in parts (format 6)', () => {
     expect((await rehydrateBackupFiles(opened)).items).toHaveLength(2500);
   });
 
+  it('keeps the order of the lists in the last part and restores it', async () => {
+    const terms = [{ field: 'series', values: ['Gundam', 'Evangelion'] }, { field: 'unknown', values: ['x'] }];
+    const files = asFiles(await collectParts({
+      items: [item(1, photoOfSize(100)), item(2, photoOfSize(100))],
+      wishlist: [],
+      terms,
+    }, { partBytes: 150 }));
+
+    const opened = await readBackupFiles(files);
+    expect(opened[0].payload).not.toHaveProperty('terms');
+    expect(opened[1].payload.terms).toEqual({ series: ['Gundam', 'Evangelion'] });
+    expect(validateBackupFiles(opened, BACKUP_VERSION)).toBe(true);
+    expect((await rehydrateBackupFiles(opened)).terms).toEqual([{ field: 'series', values: ['Gundam', 'Evangelion'] }]);
+  });
+
+  it('keeps the order of the lists in the new last part when the last part is made again smaller', async () => {
+    const terms = [{ field: 'series', values: ['Gundam', 'Evangelion'] }];
+    const parts = createBackupParts({ items: [item(1, photoOfSize(100)), item(2, photoOfSize(100))], wishlist: [], terms });
+    const saved = [];
+    let step = await parts.next();
+    // The one part, holding everything, could not be saved; then the two smaller ones are.
+    step = await parts.next({ partBytes: 150 });
+    while (!step.done) {
+      saved.push(step.value);
+      step = await parts.next();
+    }
+
+    const opened = await readBackupFiles(asFiles(saved));
+    expect(opened.map(({ payload }) => payload.part.number)).toEqual([1, 2]);
+    expect(opened[0].payload).not.toHaveProperty('terms');
+    expect(opened[1].payload.terms).toEqual({ series: ['Gundam', 'Evangelion'] });
+    expect((await rehydrateBackupFiles(opened)).terms).toEqual(terms);
+  });
+
   it('still restores one backup file made before parts existed', async () => {
     const oldArchive = await handMadePart({ version: 5, items: [item(1)], wishlist: [] });
 

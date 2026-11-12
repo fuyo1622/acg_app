@@ -1,0 +1,220 @@
+.manage-terms {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+}
+
+.manage-terms-hint {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.term-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.term-tab {
+  min-height: 44px;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.term-tab:hover {
+  color: var(--text-main);
+  background: var(--bg-card-hover);
+}
+
+.term-tab.is-active {
+  color: white;
+  background: var(--accent-gradient);
+}
+
+.term-add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.term-add input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.term-add .btn {
+  flex-shrink: 0;
+}
+
+.term-error {
+  margin: 0.5rem 0 0;
+  color: #f87171;
+  font-size: 0.9rem;
+}
+
+.term-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.term-toolbar p {
+  flex: 1 1 14rem;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.term-toolbar .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.term-empty {
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.term-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.term-row {
+  position: relative;
+  padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+  touch-action: manipulation;
+}
+
+.term-row.is-dragging {
+  z-index: 2;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  border-color: var(--accent-primary);
+}
+
+.term-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* The handle starts a drag at once on a touch screen, so it does not scroll the page. */
+.term-drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.term-drag:active {
+  cursor: grabbing;
+}
+
+.term-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.term-name:hover {
+  background: var(--bg-card-hover);
+}
+
+.term-label {
+  overflow-wrap: anywhere;
+}
+
+.term-count {
+  flex-shrink: 0;
+  min-width: 2rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-dark);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.term-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.5rem 0.25rem;
+}
+
+.term-actions .btn {
+  padding: 0.6rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.term-actions .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.term-actions .term-delete {
+  color: #f87171;
+}
+
+.term-rename {
+  padding: 0.5rem 0 0.5rem 0.25rem;
+}
+
+.term-rename input {
+  width: 100%;
+  margin: 0;
+}
+
+.term-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 560px) {
+  .term-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

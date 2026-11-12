@@ -6,6 +6,21 @@ for published releases.
 
 ## [Unreleased]
 
+### Added
+
+- Manage lists (管理分類), linked below the home page filters: add, rename, delete, and
+  order the types, series, and characters that the collection and the wishlist share, by
+  dragging, with Move up and Move down, or with Sort by name (A to Z in English, stroke
+  order in Chinese). Renaming to a name the list has merges the two, and deleting a value
+  that items use removes it from them after a confirmation that says how many use it.
+  Filters and forms list the values in this order, and backups keep it.
+
+### Changed
+
+- Database schema version 5 adds a table for the saved orders; nothing else changes.
+- The English item form names the built-in types the way the filters do, such as
+  Figure/Statue instead of figure.
+
 ## [0.6.3] - 2026-11-12
 
 ### Fixed

@@ -2,7 +2,7 @@ import Dexie from 'dexie';
 import { toValueArray } from '../utils/valueUtils';
 
 export const DB_NAME = 'acg-merch-db';
-export const DB_SCHEMA_VERSION = 4;
+export const DB_SCHEMA_VERSION = 5;
 
 export function migrateItemToV2(item) {
   item.series = toValueArray(item.series);
@@ -37,7 +37,13 @@ db.version(3).stores({
 
 // Version 4 lets a record hold several photos. In both tables the single `photo` becomes
 // the first entry of `photos`; the indexes stay the same.
-db.version(DB_SCHEMA_VERSION).stores({}).upgrade(transaction => Promise.all([
+db.version(4).stores({}).upgrade(transaction => Promise.all([
   transaction.table('items').toCollection().modify(migrateRecordToV4),
   transaction.table('wishlist').toCollection().modify(migrateRecordToV4),
 ]));
+
+// Version 5 adds the user's order of types, series, and characters: one record per field,
+// `{ field, values }`. Nothing else changes.
+db.version(DB_SCHEMA_VERSION).stores({
+  terms: 'field',
+});

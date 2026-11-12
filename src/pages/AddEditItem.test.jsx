@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { LanguageProvider } from '../contexts/LanguageContext';
@@ -60,9 +60,13 @@ function renderForm(props = {}) {
 // `editItem` and `moveEntry` mirror the component's own contract: `undefined` while the
 // query is in flight, `{ item: null }` or `{ entry: null }` once Dexie confirms the id
 // does not exist.
-function mockLiveQueries({ allItems = [], editItem, moveEntry } = {}) {
+function mockLiveQueries({ allItems = [], editItem, moveEntry, terms } = {}) {
   vi.mocked(useLiveQuery).mockImplementation((query) => {
     const source = query.toString();
+
+    if (source.includes('db.terms')) {
+      return terms;
+    }
 
     if (source.includes('db.items.toArray')) {
       return allItems;
@@ -467,5 +471,16 @@ describe('AddEditItem smoke flows', () => {
       expect(routerMocks.navigate).toHaveBeenLastCalledWith('/item/7', { replace: true, state: { order: [5, 7, 9] } });
     });
     routerMocks.location = undefined;
+  });
+
+  it('offers the types in the order saved on the lists page', () => {
+    mockLiveQueries({
+      allItems: [{ id: 1, series: ['Evangelion'], merchandise_type: 'Prize figure' }],
+      terms: [{ field: 'merchandise_type', values: ['Nendoroid', 'plush', 'figure'] }],
+    });
+    renderForm();
+
+    const options = within(screen.getByLabelText('Merchandise Type')).getAllByRole('option').map(option => option.textContent);
+    expect(options).toEqual(['---', 'Nendoroid', 'Plush', 'Figure/Statue', 'Prize figure', '➕ Add self-defined type...']);
   });
 });

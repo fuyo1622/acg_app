@@ -7,6 +7,7 @@ import Wishlist from './pages/Wishlist';
 import AddEditWishlistEntry from './pages/AddEditWishlistEntry';
 import WishlistDetail from './pages/WishlistDetail';
 import Guide from './pages/Guide';
+import ManageTerms from './pages/ManageTerms';
 import Privacy from './pages/Privacy';
 import NotFound from './pages/NotFound';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -30,6 +31,7 @@ function App() {
               <Route path="/wishlist/edit/:id" element={<AddEditWishlistEntry />} />
               <Route path="/wishlist/item/:id" element={<WishlistDetail />} />
               <Route path="/wishlist/move/:id" element={<AddEditItem mode="move" />} />
+              <Route path="/terms" element={<ManageTerms />} />
               <Route path="/guide" element={<Guide />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />

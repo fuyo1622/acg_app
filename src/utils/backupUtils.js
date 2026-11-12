@@ -3,6 +3,7 @@ import { isWebUrl } from './linkUtils';
 import { mapWithConcurrency } from './concurrencyUtils';
 import { getPhotos } from './photoUtils';
 import { createWishlistEntry, isDateKey } from './wishlistUtils';
+import { TERM_FIELDS, termMaxLength } from './termUtils';
 import { createZip, isZip, readZip } from './zipUtils';
 import {
   BACKUP_CONCURRENCY,
@@ -320,8 +321,9 @@ function createBackupId() {
 }
 
 // One part as an archive: backup.json with the part's records, and their photos next to it,
-// numbered within the part. `records` are `{ section, metadata, photos }`.
-async function archivePart(records, { id, number, totals }) {
+// numbered within the part. `records` are `{ section, metadata, photos }`; the last part
+// also holds the order of the lists, `terms`.
+async function archivePart(records, { id, number, totals, terms }) {
   const sections = { items: [], wishlist: [] };
   const files = [];
   for (const { section, metadata, photos } of records) {
@@ -336,7 +338,7 @@ async function archivePart(records, { id, number, totals }) {
     });
   }
   const payload = {
-    ...buildBackupPayload(sections, BACKUP_VERSION),
+    ...buildBackupPayload({ ...sections, terms }, BACKUP_VERSION),
     part: totals
       ? { backup: id, number, last: true, parts: number, ...totals }
       : { backup: id, number, last: false },
@@ -367,12 +369,13 @@ function groupRecords(records, limit) {
 // and which part it is. A part ends before the record whose photos would take it past
 // `partBytes`, so only one part's photos are held at a time and each part can be saved on
 // its own. The last part also says how many parts and records there are, so a restore can
-// tell when one is missing. `preparePhoto` may make a photo smaller first.
+// tell when one is missing, and holds the order of the lists, `terms`. `preparePhoto` may
+// make a photo smaller first.
 //
 // A part that could not be saved can be asked for again in smaller parts: answering it with
 // `next({ partBytes })` instead of `next()` makes its records again as parts of that size,
 // numbered from its own number on, and the parts after them keep that size.
-export async function* createBackupParts({ items, wishlist }, {
+export async function* createBackupParts({ items, wishlist, terms = [] }, {
   partBytes = BACKUP_PART_BYTES,
   preparePhoto = photo => photo,
   onPhotoDone = () => {},
@@ -387,10 +390,13 @@ export async function* createBackupParts({ items, wishlist }, {
   const id = createBackupId();
   let limit = partBytes;
   let number = 1;
+  const termsByField = Object.fromEntries(terms
+    .filter(entry => TERM_FIELDS.includes(entry?.field) && Array.isArray(entry.values))
+    .map(entry => [entry.field, entry.values]));
 
   // Offers `records` as part `number`, and again in smaller parts for as long as it is asked.
   async function* offer(records, totals) {
-    const request = yield await archivePart(records, { id, number, totals });
+    const request = yield await archivePart(records, { id, number, totals, terms: totals ? termsByField : undefined });
     if (!(request?.partBytes > 0)) {
       number += 1;
       return;
@@ -456,13 +462,17 @@ export async function readBackupFile(file) {
   return { payload: parseBackupText(await file.text()), archive: null };
 }
 
-export function buildBackupPayload({ items, wishlist }, version) {
-  return {
+// `terms` holds the user's order of types, series, and characters, by field; a backup
+// without one restores the default order.
+export function buildBackupPayload({ items, wishlist, terms }, version) {
+  const payload = {
     version,
     timestamp: new Date().toISOString(),
     items,
     wishlist,
   };
+  if (terms && Object.keys(terms).length > 0) payload.terms = terms;
+  return payload;
 }
 
 export function parseBackupText(text) {
@@ -529,7 +539,25 @@ export function validateBackupPayload(payload, expectedVersion, archive = null) 
     payload.wishlist.forEach((entry, index) => validateWishlistEntry(entry, index, entryIds, archive));
   }
 
+  validateTerms(payload.terms);
   return true;
+}
+
+function validateTerms(terms) {
+  if (terms === undefined) return;
+  if (typeof terms !== 'object' || terms === null || Array.isArray(terms)) {
+    throw new Error('Backup lists have an invalid format');
+  }
+  for (const field of TERM_FIELDS) {
+    const values = terms[field];
+    if (values === undefined) continue;
+    if (!Array.isArray(values) || values.length > BACKUP_LIMITS.maxTermsPerField) {
+      throw new Error(`Backup ${field} list has an invalid format`);
+    }
+    if (values.some(value => typeof value !== 'string' || !value.trim() || value.length > termMaxLength(field))) {
+      throw new Error(`Backup ${field} list has an invalid value`);
+    }
+  }
 }
 
 // Returns the photos of a backup record as Blobs: slices of the archive for format 5, or
@@ -608,6 +636,9 @@ export async function rehydrateBackup(payload, archive = null) {
     wishlist: hasWishlistSection(payload)
       ? await rehydrateWishlistEntries(payload.wishlist, archive)
       : undefined,
+    terms: TERM_FIELDS
+      .filter(field => Array.isArray(payload.terms?.[field]))
+      .map(field => ({ field, values: toValueArray(payload.terms[field]) })),
   };
 }
 
@@ -686,19 +717,21 @@ export function validateBackupFiles(files, expectedVersion) {
 // The records of all the files of a restore, in order, ready to store.
 export async function rehydrateBackupFiles(files) {
   const items = [];
+  const terms = [];
   let wishlist;
   for (const { payload, archive } of files) {
     const part = await rehydrateBackup(payload, archive);
     items.push(...part.items);
     if (part.wishlist) wishlist = [...(wishlist ?? []), ...part.wishlist];
+    terms.push(...part.terms);
   }
-  return { items, wishlist };
+  return { items, wishlist, terms };
 }
 
-// Replaces the collection, and the wishlist when the backup has one, in one transaction,
-// so a failure leaves both tables as they were.
-export async function replaceBackupInDb(db, { items, wishlist }) {
-  const tables = wishlist ? [db.items, db.wishlist] : [db.items];
+// Replaces the collection, the wishlist when the backup has one, and the saved list
+// orders, in one transaction, so a failure leaves them all as they were.
+export async function replaceBackupInDb(db, { items, wishlist, terms = [] }) {
+  const tables = wishlist ? [db.items, db.wishlist, db.terms] : [db.items, db.terms];
 
   await db.transaction('rw', tables, async () => {
     await db.items.clear();
@@ -708,5 +741,9 @@ export async function replaceBackupInDb(db, { items, wishlist }) {
       await db.wishlist.clear();
       await db.wishlist.bulkAdd(wishlist);
     }
+
+    // The lists follow the backup, so an older one without them leaves the default order.
+    await db.terms.clear();
+    if (terms.length > 0) await db.terms.bulkAdd(terms);
   });
 }

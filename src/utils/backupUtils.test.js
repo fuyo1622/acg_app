@@ -202,7 +202,7 @@ describe('wishlist backups', () => {
       clear: vi.fn().mockResolvedValue(undefined),
       bulkAdd: vi.fn().mockResolvedValue(undefined),
     });
-    const db = { items: table(), wishlist: table() };
+    const db = { items: table(), wishlist: table(), terms: table() };
     db.transaction = vi.fn(async (_mode, _tables, callback) => callback());
     return db;
   }
@@ -328,16 +328,16 @@ describe('wishlist backups', () => {
 
   it('rehydrates the wishlist only when the backup has one', async () => {
     await expect(rehydrateBackup({ version: 2, items: [] }))
-      .resolves.toEqual({ items: [], wishlist: undefined });
+      .resolves.toEqual({ items: [], wishlist: undefined, terms: [] });
     await expect(rehydrateBackup(payload([entry()])))
-      .resolves.toEqual({ items: [], wishlist: [expect.objectContaining({ name: 'Asuka figure' })] });
+      .resolves.toEqual({ items: [], wishlist: [expect.objectContaining({ name: 'Asuka figure' })], terms: [] });
   });
 
   it('replaces both tables in one transaction when the backup has a wishlist', async () => {
     const db = fakeDb();
     await replaceBackupInDb(db, { items: [{ id: 1 }], wishlist: [{ id: 2 }] });
 
-    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items, db.wishlist], expect.any(Function));
+    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items, db.wishlist, db.terms], expect.any(Function));
     expect(db.items.bulkAdd).toHaveBeenCalledWith([{ id: 1 }]);
     expect(db.wishlist.clear).toHaveBeenCalled();
     expect(db.wishlist.bulkAdd).toHaveBeenCalledWith([{ id: 2 }]);
@@ -347,9 +347,31 @@ describe('wishlist backups', () => {
     const db = fakeDb();
     await replaceBackupInDb(db, { items: [{ id: 1 }], wishlist: undefined });
 
-    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items], expect.any(Function));
+    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items, db.terms], expect.any(Function));
     expect(db.wishlist.clear).not.toHaveBeenCalled();
     expect(db.wishlist.bulkAdd).not.toHaveBeenCalled();
+    // Without lists in the backup, the saved orders go, and the default order returns.
+    expect(db.terms.clear).toHaveBeenCalled();
+    expect(db.terms.bulkAdd).not.toHaveBeenCalled();
+  });
+
+  it('restores the saved list orders a backup holds', async () => {
+    const db = fakeDb();
+    const terms = [{ field: 'series', values: ['Gundam', 'Evangelion'] }];
+    await replaceBackupInDb(db, { items: [], wishlist: [], terms });
+
+    expect(db.terms.clear).toHaveBeenCalled();
+    expect(db.terms.bulkAdd).toHaveBeenCalledWith(terms);
+  });
+
+  it('accepts saved list orders and refuses malformed ones', () => {
+    const withTerms = terms => ({ version: BACKUP_VERSION, items: [], wishlist: [], terms });
+
+    expect(validateBackupPayload(withTerms({ series: ['Gundam', 'Evangelion'], merchandise_type: ['figure', 'Nendoroid'] }), BACKUP_VERSION)).toBe(true);
+    expect(() => validateBackupPayload(withTerms(['Gundam']), BACKUP_VERSION)).toThrow('Backup lists have an invalid format');
+    expect(() => validateBackupPayload(withTerms({ series: 'Gundam' }), BACKUP_VERSION)).toThrow('Backup series list has an invalid format');
+    expect(() => validateBackupPayload(withTerms({ character: ['Asuka', 7] }), BACKUP_VERSION)).toThrow('Backup character list has an invalid value');
+    expect(() => validateBackupPayload(withTerms({ merchandise_type: ['x'.repeat(101)] }), BACKUP_VERSION)).toThrow('invalid value');
   });
 });
 
@@ -399,6 +421,27 @@ describe('backup archives (format 5)', () => {
     expect(new Uint8Array(await restored.items[0].photos[0].arrayBuffer())).toEqual(pngBytes());
     expect(restored.wishlist[0]).toEqual(expect.objectContaining({ id: 2, name: 'Rei plush' }));
     expect(await restored.wishlist[0].photos[0].text()).toBe('GIF89a01');
+  });
+
+  it('keeps the saved list orders in the backup and restores them', async () => {
+    const { payload, archive } = await roundTrip({
+      items: [],
+      wishlist: [],
+      terms: [{ field: 'series', values: ['Gundam', 'Evangelion'] }, { field: 'merchandise_type', values: ['Nendoroid'] }],
+    });
+
+    expect(payload.terms).toEqual({ series: ['Gundam', 'Evangelion'], merchandise_type: ['Nendoroid'] });
+    expect(validateBackupPayload(payload, BACKUP_VERSION, archive)).toBe(true);
+    expect((await rehydrateBackup(payload, archive)).terms).toEqual([
+      { field: 'merchandise_type', values: ['Nendoroid'] },
+      { field: 'series', values: ['Gundam', 'Evangelion'] },
+    ]);
+  });
+
+  it('leaves the lists out of a backup when none is saved', async () => {
+    const { payload } = await roundTrip({ items: [], wishlist: [] });
+
+    expect(payload).not.toHaveProperty('terms');
   });
 
   it('refuses a photo whose contents do not match its file type', async () => {

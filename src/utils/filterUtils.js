@@ -1,7 +1,4 @@
-import { DEFAULT_TYPES } from './constants';
-import { collectUniqueValues, isSameValue, normalizeKey, toValueArray } from './valueUtils';
-
-const DEFAULT_TYPE_KEYS = new Set(DEFAULT_TYPES.map(normalizeKey));
+import { isSameValue, normalizeKey, toValueArray } from './valueUtils';
 
 function matchesSelection(values, selected) {
   return selected === 'all' || values.some(value => isSameValue(value, selected));
@@ -42,20 +39,6 @@ export function filterItems({
   });
 }
 
-
-export function getUniqueValues(items) {
-  if (!items) return { uniqueSeries: [], uniqueCharacters: [], uniqueCustomTypes: [] };
-
-  const uniqueCustomTypes = collectUniqueValues(
-    items
-      .map(item => item.merchandise_type)
-      .filter(type => typeof type === 'string' && !DEFAULT_TYPE_KEYS.has(normalizeKey(type))),
-  );
-  const uniqueSeries = collectUniqueValues(items.flatMap(item => toValueArray(item.series)));
-  const uniqueCharacters = collectUniqueValues(items.flatMap(item => toValueArray(item.character)));
-
-  return { uniqueSeries, uniqueCharacters, uniqueCustomTypes };
-}
 
 // Keeps a selected filter usable after the collection changes: it falls back to "all"
 // when the value disappears, and re-points at the canonical spelling when only the
