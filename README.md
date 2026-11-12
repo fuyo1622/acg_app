@@ -25,7 +25,8 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
 - Keep up to 10 photos per item or entry, capture or select them, and compress large
   images before storage.
 - Export the collection and wishlist to a backup, ZIP archives with the photos inside,
-  and restore it later. A large backup comes in files of about 200 MB, with photos over
+  and restore it later. A large backup comes in files of about 200 MB (100 MB on iPhone
+  and iPad, and smaller still when the share sheet cannot take one), with photos over
   500 KB made smaller, so a phone can save it; restore it by choosing all of its files at
   once. Backups from earlier versions (JSON) still import.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.

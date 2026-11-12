@@ -21,6 +21,17 @@ for published releases.
 - The English item form names the built-in types the way the filters do, such as
   Figure/Statue instead of figure.
 
+## [0.6.3] - 2026-11-12
+
+### Fixed
+
+- On an iPhone, tapping Save on a backup file only made the screen flash: to hand a file
+  to the share sheet, Safari first reads all of it into memory, and a 200 MB file was too
+  much. The app took this for the sheet being closed and offered the same file again. On
+  iPhone and iPad a backup now comes in files of about 100 MB, and a file the share sheet
+  still cannot take is made again as files of half the size, down to about 12 MB, with a
+  message saying so. If even those cannot be shared, the backup stops and says why.
+
 ## [0.6.2] - 2026-11-12
 
 ### Fixed

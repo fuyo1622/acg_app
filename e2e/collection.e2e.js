@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { photoTest, png, readBackupArchive, solidPng } from './fixtures';
@@ -652,6 +653,75 @@ photoTest('saves a large backup in several files with smaller photos, and restor
   await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('link', { name: /Full size \d/ })).toHaveCount(3);
+});
+
+photoTest('on an iPhone, makes a file the share sheet cannot take again in smaller files, and restores them', async ({ page }, testInfo) => {
+  // An iPhone whose share sheet cannot read the first file, as with a 200 MB one, and keeps
+  // every file after it.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    });
+    window.sharedFiles = [];
+    let calls = 0;
+    navigator.canShare = () => true;
+    navigator.share = async ({ files: [file] }) => {
+      calls += 1;
+      if (calls === 1) throw new DOMException('Abort due to error while reading files.', 'AbortError');
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+      window.sharedFiles.push({ name: file.name, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) });
+    };
+  });
+  await useEnglish(page);
+  // Files of two items at first; made smaller, of one.
+  await page.evaluate(() => {
+    sessionStorage.setItem('acgBackupPartBytes', '250000');
+    sessionStorage.setItem('acgBackupMinPartBytes', '100000');
+  });
+  await seedLargePhotos(page, { count: 4, bytes: 100_000 });
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(4);
+
+  await page.getByRole('button', { name: 'Export Backup' }).click();
+  await expect(page.getByRole('dialog', { name: 'Backup file 1 is ready' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('dialog', { name: 'Backup file 1 is ready' })).not.toContainText('too large');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('dialog', { name: 'Backup file 1 is ready' })).toContainText('too large for the share sheet');
+  for (const number of [1, 2, 3, 4]) {
+    await expect(page.getByRole('dialog', { name: `Backup file ${number} is ready` })).toBeVisible();
+    await page.getByRole('button', { name: 'Save' }).click();
+  }
+  await expect(page.getByRole('dialog', { name: 'Backup saved in 4 files' })).toContainText('choose all 4 files at once');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  const shared = await page.evaluate(() => window.sharedFiles);
+  expect(shared.map(file => file.name)).toEqual([1, 2, 3, 4].map(number => (
+    expect.stringMatching(new RegExp(`^acg-backup-\\d{4}-\\d{2}-\\d{2}-part0${number}\\.zip$`))
+  )));
+  const paths = [];
+  for (const file of shared) {
+    const path = testInfo.outputPath(file.name);
+    await writeFile(path, Buffer.from(file.base64, 'base64'));
+    const { backup } = await readBackupArchive(path);
+    expect(backup.items).toHaveLength(1);
+    paths.push(path);
+  }
+
+  // As if the phone lost the data: the four files are all that is left.
+  await clearCollection(page);
+  await expect(page.getByText('No items found')).toBeVisible();
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(paths);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.item-card')).toHaveCount(4);
+  expect(await storedPhotoSizes(page)).toEqual([100_000, 100_000, 100_000, 100_000]);
 });
 
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {

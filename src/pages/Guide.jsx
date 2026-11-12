@@ -45,7 +45,7 @@ const content = {
         items: [
           '備份是復原用的安全備份，不是每次更新 App 都必須執行的步驟。',
           '備份檔是 .zip 檔，照片以圖片檔存在裡面；舊版的 .json 備份也能匯入。',
-          '照片多時，備份會分成約 200 MB 的幾個檔案，一個一個準備；每個都按「儲存」，存到同一個資料夾。大張的照片在備份中會縮小，App 裡的照片不變。',
+          '照片多時，備份會分成幾個檔案，一個一個準備（電腦上約 200 MB，iPhone 與 iPad 上約 100 MB）；每個都按「儲存」，存到同一個資料夾。若分享選單接受不了某個檔案，App 會把它改成較小的檔案。大張的照片在備份中會縮小，App 裡的照片不變。',
           '還原分成幾個檔案的備份時，在選檔畫面右上角點「選取」，點選全部檔案後再點「打開」；少選了 App 會說缺哪幾個。',
           '在 iPhone 或 iPad 上，備份準備好後按「儲存」→「儲存到檔案」。存檔畫面上方會顯示要存到哪個資料夾，可點一下改成「我的 iPhone」或「iCloud 雲碟」。',
           '找不到備份檔時，打開「檔案」App，看「最近項目」或搜尋「acg-backup」。',
@@ -107,7 +107,7 @@ const content = {
         items: [
           'A backup is for recovery, not a required step for every app update.',
           'A backup is a .zip file with the photos inside as image files. Backups from earlier versions, which are .json files, can still be imported.',
-          'With many photos, a backup comes in several files of about 200 MB, prepared one at a time. Tap Save for each and keep them in the same folder. Large photos are made smaller in the backup; the photos in the app stay as they are.',
+          'With many photos, a backup comes in several files, prepared one at a time: about 200 MB each on a computer, 100 MB on iPhone and iPad. Tap Save for each and keep them in the same folder. If the share sheet cannot take a file, the app makes it again as smaller files. Large photos are made smaller in the backup; the photos in the app stay as they are.',
           'To restore a backup saved in several files, tap Select at the top right of the file picker, tap all of its files, then tap Open. If one is missing, the app says which.',
           'On iPhone or iPad, tap Save when the backup is ready, then Save to Files. The top of that screen shows the folder it saves to; tap it to choose another, such as On My iPhone or iCloud Drive.',
           'If you cannot find a backup, open the Files app and look in Recents, or search for "acg-backup".',

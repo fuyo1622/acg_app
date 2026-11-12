@@ -44,6 +44,8 @@ vi.mock('../utils/backupUtils', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
+    // The real one, watched, to see the size of the files a backup is made in.
+    createBackupParts: vi.fn(actual.createBackupParts),
     replaceBackupInDb: backupMocks.replaceBackupInDb,
   };
 });
@@ -494,6 +496,10 @@ describe('Home smoke flows', () => {
     expect(link.download).toMatch(/^acg-backup-\d{4}-\d{2}-\d{2}\.zip$/);
     // Safari reads the file after the click returns, so the address is not revoked at once.
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    // A download can be a large file.
+    expect(createBackupParts).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      partBytes: 200 * 1024 * 1024,
+    }));
   });
 
   it('says that it is working while a backup is prepared', async () => {
@@ -527,6 +533,15 @@ describe('Home smoke flows', () => {
       delete navigator.canShare;
     });
 
+    // A person needs a few seconds to open the share sheet and close it again.
+    const closedByPerson = () => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5000);
+      return Promise.reject(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+    };
+
+    // What Safari says when it cannot read a file into memory for the share sheet.
+    const readError = () => Object.assign(new Error('Abort due to error while reading files.'), { name: 'AbortError' });
+
     it('saves the backup through the share sheet, opened by a tap once the file is ready', async () => {
       dbMocks.items.toArray.mockResolvedValue([collectionItem(1, 0)]);
       renderHome();
@@ -537,6 +552,10 @@ describe('Home smoke flows', () => {
       expect(ready).toHaveTextContent('Save to Files');
       expect(ready).toHaveTextContent(/acg-backup-\d{4}-\d{2}-\d{2}\.zip/);
       expect(navigator.share).not.toHaveBeenCalled();
+      // The share sheet reads the whole file into memory, so its files are smaller.
+      expect(createBackupParts).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        partBytes: 100 * 1024 * 1024,
+      }));
 
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -554,7 +573,7 @@ describe('Home smoke flows', () => {
     });
 
     it('says nothing more when the share sheet is closed without saving', async () => {
-      navigator.share.mockRejectedValue(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+      navigator.share.mockImplementation(closedByPerson);
       renderHome();
 
       fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
@@ -582,7 +601,7 @@ describe('Home smoke flows', () => {
     });
 
     it('asks before replacing data when the safety backup was not saved', async () => {
-      navigator.share.mockRejectedValue(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+      navigator.share.mockImplementation(closedByPerson);
       dbMocks.items.toArray.mockResolvedValue([collectionItem(1, 0)]);
       renderHome();
 
@@ -649,7 +668,7 @@ describe('Home smoke flows', () => {
       it('offers a file again when its share sheet is closed, and says the backup is unfinished if stopped', async () => {
         navigator.share
           .mockResolvedValueOnce(undefined)
-          .mockRejectedValueOnce(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+          .mockImplementationOnce(closedByPerson);
         renderHome();
 
         fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
@@ -664,6 +683,102 @@ describe('Home smoke flows', () => {
         expect(await screen.findByRole('dialog', { name: 'Backup not finished' }))
           .toHaveTextContent('a restore needs every file');
         expect(navigator.share).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('when the share sheet cannot take a file', () => {
+      beforeEach(() => {
+        // Files of three items at first, and at least one item's worth when made smaller.
+        sessionStorage.setItem('acgBackupPartBytes', '300');
+        sessionStorage.setItem('acgBackupMinPartBytes', '100');
+        dbMocks.items.toArray.mockResolvedValue([1, 2, 3, 4].map(id => collectionItem(id, 100)));
+      });
+
+      afterEach(() => {
+        sessionStorage.removeItem('acgBackupPartBytes');
+        sessionStorage.removeItem('acgBackupMinPartBytes');
+      });
+
+      const sharedItems = async call => JSON.parse(await (await readZip(call[0].files[0])).text('backup.json'));
+
+      it('makes it again as smaller files, then saves every file of the backup', async () => {
+        navigator.share.mockRejectedValueOnce(readError());
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        const first = await screen.findByRole('dialog', { name: 'Backup file 1 is ready' });
+        expect(first).not.toHaveTextContent('too large');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        // Not offered again as it was: file 1 is made again, smaller, and the dialog says why.
+        expect(await screen.findByText(/too large for the share sheet/)).toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'Backup file 1 is ready' })).toBeInTheDocument();
+        for (const number of [1, 2, 3, 4]) {
+          if (number > 1) await screen.findByRole('dialog', { name: `Backup file ${number} is ready` });
+          fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        }
+
+        const saved = await screen.findByRole('dialog', { name: 'Backup saved in 4 files' });
+        expect(saved).toHaveTextContent('choose all 4 files at once');
+        const [failed, ...kept] = navigator.share.mock.calls;
+        expect((await sharedItems(failed)).items.map(record => record.id)).toEqual([1, 2, 3]);
+        const parts = await Promise.all(kept.map(sharedItems));
+        expect(parts.map(part => part.items.map(record => record.id))).toEqual([[1], [2], [3], [4]]);
+        expect(parts.map(part => part.part.number)).toEqual([1, 2, 3, 4]);
+        expect(parts[3].part).toEqual(expect.objectContaining({ last: true, parts: 4, items: 4 }));
+        expect(kept.map(call => call[0].files[0].name)).toEqual([1, 2, 3, 4].map(number => (
+          expect.stringMatching(new RegExp(`^acg-backup-\\d{4}-\\d{2}-\\d{2}-part0${number}\\.zip$`))
+        )));
+      });
+
+      it('takes a share sheet that fails at once for a failure, not for a person closing it', async () => {
+        navigator.share.mockRejectedValueOnce(Object.assign(new Error('Share canceled'), { name: 'AbortError' }));
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+        expect(await screen.findByText(/too large for the share sheet/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect((await sharedItems(navigator.share.mock.calls[1])).items.map(record => record.id)).toEqual([1]);
+      });
+
+      it('stops and says why when even the smallest file cannot be shared', async () => {
+        navigator.share.mockRejectedValue(readError());
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+        await screen.findByText(/too large for the share sheet/);
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        const stopped = await screen.findByRole('dialog', { name: 'Backup could not be shared' });
+        expect(stopped).toHaveTextContent('AbortError: Abort due to error while reading files.');
+        expect(stopped).toHaveTextContent('a few GB free');
+        expect(navigator.share).toHaveBeenCalledTimes(2);
+        expect(screen.queryByRole('dialog', { name: /Backup file/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Export Backup' })).toBeEnabled();
+      });
+
+      it('makes a safety backup smaller too, then restores once all of it is saved', async () => {
+        navigator.share.mockRejectedValueOnce(readError());
+        renderHome();
+
+        const importFile = new File([JSON.stringify({ version: 2, items: [] })], 'backup.json', { type: 'application/json' });
+        fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [importFile] } });
+        fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+        expect(await screen.findByText(/too large for the share sheet/)).toBeInTheDocument();
+        expect(replaceBackupInDb).not.toHaveBeenCalled();
+        for (const number of [1, 2, 3, 4]) {
+          await screen.findByRole('dialog', { name: `Safety backup file ${number} is ready` });
+          fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        }
+
+        await waitFor(() => {
+          expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined, terms: [] });
+        });
+        expect(navigator.share).toHaveBeenCalledTimes(5);
       });
     });
   });

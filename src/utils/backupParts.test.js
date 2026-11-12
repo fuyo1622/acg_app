@@ -101,6 +101,97 @@ describe('backups in parts (format 6)', () => {
     expect(archive.size('photos/items/0001-2.png')).toBe(10);
   });
 
+  describe('a part that could not be saved', () => {
+    // Drives the parts the way the app does: `answer(part)` says what to pass to `next()`
+    // after each part; `undefined` means it was saved. Returns the parts that were saved.
+    async function saveParts(sections, options, answer) {
+      const parts = createBackupParts(sections, options);
+      const saved = [];
+      let step = await parts.next();
+      while (!step.done) {
+        const request = answer(step.value);
+        if (!request) saved.push(step.value);
+        step = await parts.next(request);
+      }
+      return saved;
+    }
+
+    const restore = async parts => {
+      const opened = await readBackupFiles(asFiles(parts));
+      validateBackupFiles(opened, BACKUP_VERSION);
+      return rehydrateBackupFiles(opened);
+    };
+
+    const sixItems = () => ({ items: [1, 2, 3, 4, 5, 6].map(id => item(id, photoOfSize(100))), wishlist: [entry(7)] });
+
+    it('is made again as smaller parts from its own number on, and later parts keep the smaller size', async () => {
+      let failed = false;
+      const saved = await saveParts(sixItems(), { partBytes: 300 }, (part) => {
+        if (part.number !== 1 || failed) return undefined;
+        failed = true;
+        return { partBytes: 150 };
+      });
+
+      const opened = await readBackupFiles(asFiles(saved));
+      expect(opened.map(({ payload }) => payload.items.map(record => record.id))).toEqual([[1], [2], [3], [4], [5], [6]]);
+      expect(opened.map(({ payload }) => payload.part.number)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(opened.at(-1).payload.part).toEqual(expect.objectContaining({ last: true, parts: 6, items: 6, wishlist: 1 }));
+      const restored = await restore(saved);
+      expect(restored.items.map(record => record.id)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(restored.wishlist.map(record => record.id)).toEqual([7]);
+    });
+
+    it('is made again more than once, and only the new last part carries the totals', async () => {
+      // Everything fits in one part; it fails at 1,000 bytes and again at 400.
+      const tries = [];
+      const saved = await saveParts(sixItems(), { partBytes: 1000 }, (part) => {
+        tries.push(part.number);
+        if (tries.length === 1) return { partBytes: 400 };
+        if (tries.length === 2) return { partBytes: 200 };
+        return undefined;
+      });
+
+      const opened = await readBackupFiles(asFiles(saved));
+      expect(opened.map(({ payload }) => payload.items.map(record => record.id))).toEqual([[1, 2], [3, 4], [5, 6]]);
+      expect(opened.map(({ payload }) => payload.part.last)).toEqual([false, false, true]);
+      expect(opened.at(-1).payload.part).toEqual(expect.objectContaining({ parts: 3, items: 6, wishlist: 1 }));
+      expect(tries).toEqual([1, 1, 1, 2, 3]);
+      expect((await restore(saved)).items).toHaveLength(6);
+    });
+
+    it('is offered again as it is when one record is already larger than the smaller size', async () => {
+      const sections = { items: [item(1, photoOfSize(200), photoOfSize(200))], wishlist: [] };
+      let asked = 0;
+      const saved = await saveParts(sections, { partBytes: 1000 }, () => (asked++ === 0 ? { partBytes: 100 } : undefined));
+
+      expect(asked).toBe(2);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toEqual(expect.objectContaining({ number: 1, last: true }));
+      expect((await restore(saved)).items.map(record => record.id)).toEqual([1]);
+    });
+
+    it('does not prepare its photos again', async () => {
+      const preparePhoto = vi.fn(async photo => photo);
+      let failed = false;
+      await saveParts(sixItems(), { partBytes: 300, preparePhoto }, (part) => {
+        if (part.number !== 1 || failed) return undefined;
+        failed = true;
+        return { partBytes: 150 };
+      });
+
+      expect(preparePhoto).toHaveBeenCalledTimes(6);
+    });
+
+    it('makes an empty backup again as one empty last part', async () => {
+      let asked = 0;
+      const saved = await saveParts({ items: [], wishlist: [] }, {}, () => (asked++ === 0 ? { partBytes: 1 } : undefined));
+
+      expect(saved).toEqual([expect.objectContaining({ number: 1, last: true })]);
+      const [{ payload }] = await readBackupFiles(asFiles(saved));
+      expect(payload.part).toEqual(expect.objectContaining({ parts: 1, items: 0, wishlist: 0 }));
+    });
+  });
+
   it('restores every record of every part, whatever order the files come in', async () => {
     const files = (await threeParts()).reverse();
 
@@ -216,6 +307,25 @@ describe('backups in parts (format 6)', () => {
     expect(opened[1].payload.terms).toEqual({ series: ['Gundam', 'Evangelion'] });
     expect(validateBackupFiles(opened, BACKUP_VERSION)).toBe(true);
     expect((await rehydrateBackupFiles(opened)).terms).toEqual([{ field: 'series', values: ['Gundam', 'Evangelion'] }]);
+  });
+
+  it('keeps the order of the lists in the new last part when the last part is made again smaller', async () => {
+    const terms = [{ field: 'series', values: ['Gundam', 'Evangelion'] }];
+    const parts = createBackupParts({ items: [item(1, photoOfSize(100)), item(2, photoOfSize(100))], wishlist: [], terms });
+    const saved = [];
+    let step = await parts.next();
+    // The one part, holding everything, could not be saved; then the two smaller ones are.
+    step = await parts.next({ partBytes: 150 });
+    while (!step.done) {
+      saved.push(step.value);
+      step = await parts.next();
+    }
+
+    const opened = await readBackupFiles(asFiles(saved));
+    expect(opened.map(({ payload }) => payload.part.number)).toEqual([1, 2]);
+    expect(opened[0].payload).not.toHaveProperty('terms');
+    expect(opened[1].payload.terms).toEqual({ series: ['Gundam', 'Evangelion'] });
+    expect((await rehydrateBackupFiles(opened)).terms).toEqual(terms);
   });
 
   it('still restores one backup file made before parts existed', async () => {

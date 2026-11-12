@@ -320,15 +320,47 @@ function createBackupId() {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function archivePart(part, id, totals, terms) {
+// One part as an archive: backup.json with the part's records, and their photos next to it,
+// numbered within the part. `records` are `{ section, metadata, photos }`; the last part
+// also holds the order of the lists, `terms`.
+async function archivePart(records, { id, number, totals, terms }) {
+  const sections = { items: [], wishlist: [] };
+  const files = [];
+  for (const { section, metadata, photos } of records) {
+    const position = String(sections[section].length + 1).padStart(4, '0');
+    sections[section].push({
+      ...metadata,
+      photos: photos.map((photo, index) => {
+        const name = `photos/${section}/${position}-${index + 1}.${PHOTO_EXTENSIONS[photo.type]}`;
+        files.push({ name, data: photo });
+        return name;
+      }),
+    });
+  }
   const payload = {
-    ...buildBackupPayload({ items: part.items, wishlist: part.wishlist, terms }, BACKUP_VERSION),
+    ...buildBackupPayload({ ...sections, terms }, BACKUP_VERSION),
     part: totals
-      ? { backup: id, number: part.number, last: true, parts: part.number, ...totals }
-      : { backup: id, number: part.number, last: false },
+      ? { backup: id, number, last: true, parts: number, ...totals }
+      : { backup: id, number, last: false },
   };
-  const blob = await createZip([{ name: BACKUP_DATA_FILE, data: JSON.stringify(payload, null, 2) }, ...part.files]);
-  return { number: part.number, last: Boolean(totals), blob };
+  const blob = await createZip([{ name: BACKUP_DATA_FILE, data: JSON.stringify(payload, null, 2) }, ...files]);
+  return { number, last: Boolean(totals), blob };
+}
+
+// Whole records, in order, into groups whose photos stay within `limit` bytes. A record
+// larger than that is a group of its own; no records make one empty group.
+function groupRecords(records, limit) {
+  const groups = [[]];
+  let bytes = 0;
+  for (const record of records) {
+    if (groups.at(-1).length > 0 && bytes + record.bytes > limit) {
+      groups.push([]);
+      bytes = 0;
+    }
+    groups.at(-1).push(record);
+    bytes += record.bytes;
+  }
+  return groups;
 }
 
 // Format 5 made a backup a ZIP archive: backup.json holds the records, and each photo is an
@@ -339,6 +371,10 @@ async function archivePart(part, id, totals, terms) {
 // its own. The last part also says how many parts and records there are, so a restore can
 // tell when one is missing, and holds the order of the lists, `terms`. `preparePhoto` may
 // make a photo smaller first.
+//
+// A part that could not be saved can be asked for again in smaller parts: answering it with
+// `next({ partBytes })` instead of `next()` makes its records again as parts of that size,
+// numbered from its own number on, and the parts after them keep that size.
 export async function* createBackupParts({ items, wishlist, terms = [] }, {
   partBytes = BACKUP_PART_BYTES,
   preparePhoto = photo => photo,
@@ -352,12 +388,34 @@ export async function* createBackupParts({ items, wishlist, terms = [] }, {
   }
 
   const id = createBackupId();
-  const newPart = number => ({ number, items: [], wishlist: [], files: [], bytes: 0 });
-  let part = newPart(1);
+  let limit = partBytes;
+  let number = 1;
+  const termsByField = Object.fromEntries(terms
+    .filter(entry => TERM_FIELDS.includes(entry?.field) && Array.isArray(entry.values))
+    .map(entry => [entry.field, entry.values]));
 
+  // Offers `records` as part `number`, and again in smaller parts for as long as it is asked.
+  async function* offer(records, totals) {
+    const request = yield await archivePart(records, { id, number, totals, terms: totals ? termsByField : undefined });
+    if (!(request?.partBytes > 0)) {
+      number += 1;
+      return;
+    }
+    limit = Math.min(limit, request.partBytes);
+    // Grouped one part at a time, since a smaller part can be asked for again in between.
+    let remaining = records;
+    do {
+      const [group] = groupRecords(remaining, limit);
+      remaining = remaining.slice(group.length);
+      yield* offer(group, remaining.length === 0 ? totals : null);
+    } while (remaining.length > 0);
+  }
+
+  let pending = [];
+  let pendingBytes = 0;
   const sections = [['items', items, itemMetadata], ['wishlist', wishlist, wishlistMetadata]];
-  for (const [section, records, toMetadata] of sections) {
-    for (const record of records) {
+  for (const [section, sectionRecords, toMetadata] of sections) {
+    for (const record of sectionRecords) {
       const photos = [];
       for (const stored of getPhotos(record).filter(photo => photo instanceof Blob)) {
         const photo = await preparePhoto(stored);
@@ -368,28 +426,17 @@ export async function* createBackupParts({ items, wishlist, terms = [] }, {
       }
 
       const bytes = photos.reduce((total, photo) => total + photo.size, 0);
-      if (part.items.length + part.wishlist.length > 0 && part.bytes + bytes > partBytes) {
-        yield await archivePart(part, id, null);
-        part = newPart(part.number + 1);
+      if (pending.length > 0 && pendingBytes + bytes > limit) {
+        yield* offer(pending, null);
+        pending = [];
+        pendingBytes = 0;
       }
-
-      const position = String(part[section].length + 1).padStart(4, '0');
-      part[section].push({
-        ...toMetadata(record),
-        photos: photos.map((photo, index) => {
-          const name = `photos/${section}/${position}-${index + 1}.${PHOTO_EXTENSIONS[photo.type]}`;
-          part.files.push({ name, data: photo });
-          return name;
-        }),
-      });
-      part.bytes += bytes;
+      pending.push({ section, metadata: toMetadata(record), photos, bytes });
+      pendingBytes += bytes;
     }
   }
 
-  const termsByField = Object.fromEntries(terms
-    .filter(entry => TERM_FIELDS.includes(entry?.field) && Array.isArray(entry.values))
-    .map(entry => [entry.field, entry.values]));
-  yield await archivePart(part, id, { items: items.length, wishlist: wishlist.length }, termsByField);
+  yield* offer(pending, { items: items.length, wishlist: wishlist.length });
 }
 
 // The whole backup as one archive, however large.
