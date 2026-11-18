@@ -189,6 +189,10 @@ describe('validateBackupPayload', () => {
         clear: vi.fn().mockResolvedValue(undefined),
         bulkAdd: vi.fn().mockRejectedValue(error),
       },
+      terms: {
+        clear: vi.fn().mockResolvedValue(undefined),
+        bulkAdd: vi.fn().mockResolvedValue(undefined),
+      },
       transaction: vi.fn(async (_mode, _tables, callback) => callback()),
     };
 

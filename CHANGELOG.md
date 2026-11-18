@@ -21,6 +21,22 @@ for published releases.
 - The English item form names the built-in types the way the filters do, such as
   Figure/Statue instead of figure.
 
+## [0.6.6] - 2026-11-18
+
+### Fixed
+
+- Restoring a backup on an iPhone stored every photo as a copy of the whole backup file it
+  came from (see 0.6.5): the photos could not be shown at full size, and restoring a large
+  backup would have needed far more space than a phone has. A restore now copies each photo
+  out of the backup file before storing it. So that only some of those copies are held at
+  a time, a large backup is restored in batches of about 25 MB of photos, with a count of
+  the records restored so far. A backup that fits one batch is restored at once or not at
+  all, as before. If a larger one stops part way, the app says only part of it was
+  restored, and if the app was closed during a restore, it says so the next time it opens,
+  so that the backup can be imported again.
+- Photos repaired before a backup are now stored by putting their whole record back, which
+  WebKit kept where it did not keep a changed field.
+
 ## [0.6.5] - 2026-11-18
 
 ### Fixed

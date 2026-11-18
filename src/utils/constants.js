@@ -28,6 +28,10 @@ export const BACKUP_PART_BYTES = 200 * 1024 * 1024;
 export const BACKUP_SHARE_PART_BYTES = 100 * 1024 * 1024;
 export const BACKUP_MIN_PART_BYTES = 25 * 1024 * 1024;
 export const BACKUP_SHRINK_PHOTO_BYTES = 500 * 1024;
+// A restored photo is copied out of its backup file before it is stored (Safari keeps a slice
+// of a chosen file as a copy of the whole file), so a restore stores its records in batches
+// of about this many bytes of photos, and holds only one batch's copies at a time.
+export const BACKUP_RESTORE_BATCH_BYTES = 25 * 1024 * 1024;
 
 export const BACKUP_LIMITS = Object.freeze({
   // A JSON backup from before version 5 is read into memory whole, an archive is not.
