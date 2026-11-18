@@ -23,8 +23,11 @@ import {
   BackupPartsError,
   createBackupParts,
   hasWishlistSection,
+  isDetachedPhoto,
   readBackupFiles,
+  recoverDetachedPhoto,
   rehydrateBackupFiles,
+  repairDetachedPhotos,
   replaceBackupInDb,
   validateBackupFiles,
 } from '../utils/backupUtils';
@@ -301,11 +304,20 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
       photosSaved: resume?.photos ?? 0,
       bytesSaved: resume?.bytes ?? 0,
       fingerprint: purpose === 'backup' ? backupFingerprint(sections) : null,
+      skippedPhotos: 0,
     };
     let photosDone = job.photosSaved;
     job.parts = createBackupParts(sections, {
       partBytes,
-      preparePhoto: shrinkPhotoForBackup,
+      // A photo still stored as a copy of a whole backup archive is taken out of it; one that
+      // cannot be is left out, rather than fill the file with the archive.
+      preparePhoto: async (photo) => {
+        if (!isDetachedPhoto(photo)) return shrinkPhotoForBackup(photo);
+        const recovered = await recoverDetachedPhoto(photo);
+        if (recovered) return shrinkPhotoForBackup(recovered);
+        job.skippedPhotos += 1;
+        return null;
+      },
       onPhotoDone: () => {
         photosDone += 1;
         if (backupJobRef.current === job) setProgress(current => ({ ...current, done: photosDone }));
@@ -369,30 +381,50 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
 
     endBackupJob();
+    // Photos that could not be read were left out; the last message says how many.
+    const withSkipped = message => (job.skippedPhotos > 0
+      ? [message, t('backupSkippedPhotos', { count: job.skippedPhotos })].join(lang === 'en' ? ' ' : '')
+      : message);
     if (job.purpose === 'safety') {
       await runImport(job.importData);
     } else if (job.saved === 1) {
       // The share sheet decides where the file goes, so the app names it and says where to look.
       setNotice({
         title: t('backupSavedTitle'),
-        message: t(result === 'shared' ? 'backupSharedMessage' : 'backupDownloadedMessage', { name: part.file.name }),
+        message: withSkipped(t(result === 'shared' ? 'backupSharedMessage' : 'backupDownloadedMessage', { name: part.file.name })),
       });
     } else {
       setNotice({
         title: t('backupPartsSavedTitle', { count: job.saved }),
-        message: t('backupPartsSavedMessage', {
+        message: withSkipped(t('backupPartsSavedMessage', {
           count: job.saved,
           first: backupFileName(job, { number: 1, last: false }),
           last: part.file.name,
-        }),
+        })),
       });
     }
   };
 
+  // Photos restored from a backup can be stored as copies of the whole backup file (see
+  // repairDetachedPhotos); they are repaired before anything is backed up.
+  const repairStoredPhotos = async () => {
+    setProgress({ checking: true, done: 0, total: 0 });
+    try {
+      return await repairDetachedPhotos(db, {
+        onProgress: ({ done, total }) => setProgress({ checking: true, done, total }),
+      });
+    } finally {
+      setProgress(null);
+    }
+  };
+
   // Saves a new backup, or continues the stopped one whose progress is `resume`.
-  const exportBackup = async (resume = null) => {
+  const exportBackup = async (stoppedBackup = null) => {
     setIsProcessing(true);
     try {
+      const repair = await repairStoredPhotos();
+      // Files saved before photos were repaired may hold damaged copies: start over.
+      const resume = repair.repaired > 0 ? null : stoppedBackup;
       const sections = await readBackupSections();
       const records = sections.items.length + sections.wishlist.length;
       if (resume && (backupFingerprint(sections) !== resume.fingerprint || resume.position >= records)) {
@@ -411,9 +443,13 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         endBackupJob();
         return;
       }
-      // Before the first file, say how much space the files will need.
+      // Before the first file, say how much space the files will need, and what was repaired.
       const estimate = isSingleFile(part) ? null : estimateBackupBytes(job, part);
-      setReadyPart({ ...part, estimate: estimate && { bytes: resume ? estimate.remaining : estimate.total, rest: Boolean(resume) } });
+      setReadyPart({
+        ...part,
+        estimate: estimate && { bytes: resume ? estimate.remaining : estimate.total, rest: Boolean(resume) },
+        repair: { ...repair, startedOver: Boolean(stoppedBackup) && !resume },
+      });
     } catch (error) {
       console.error(error);
       endBackupJob();
@@ -518,6 +554,8 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
       validateBackupFiles(opened, BACKUP_VERSION);
 
       const importData = { opened };
+      // The safety backup of the current data must not be filled with damaged photos.
+      await repairStoredPhotos();
       const current = await readBackupSections();
       let safetyPart = null;
       if (current.items.length > 0 || current.wishlist.length > 0) {
@@ -624,6 +662,13 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   const formatCount = count => count.toLocaleString(storageLocale);
   const statusText = (() => {
     if (!isProcessing) return '';
+    if (progress?.checking) {
+      if (!progress.total) return t('backupCheckingPhotosStart');
+      return t('backupCheckingPhotos', {
+        done: formatCount(progress.done),
+        total: formatCount(progress.total),
+      });
+    }
     if (progress?.total > 0) {
       return t('backupPreparing', {
         part: progress.part,
@@ -641,17 +686,25 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
       name: readyPart.file.name,
       size: formatBytes(readyPart.file.size, storageLocale),
       estimate: readyPart.estimate ? formatBytes(readyPart.estimate.bytes, storageLocale) : '',
+      repaired: formatCount(readyPart.repair?.repaired ?? 0),
+      unreadable: formatCount(readyPart.repair?.failed ?? 0),
     };
     // Chinese sentences follow each other without a space.
     const sentences = (...keys) => keys.map(key => t(key, values)).join(lang === 'en' ? ' ' : '');
     const smaller = readyPart.madeSmaller ? ['backupMadeSmaller'] : [];
+    const repair = [
+      ...(readyPart.repair?.repaired > 0 ? ['backupRepairedPhotos'] : []),
+      ...(readyPart.repair?.startedOver ? ['backupRepairedStartOver'] : []),
+      ...(readyPart.repair?.failed > 0 ? ['backupUnreadablePhotos'] : []),
+    ];
     if (isSingleFile(readyPart)) {
-      return { title: t('exportReadyTitle'), message: sentences(...smaller, 'exportReadyMessage') };
+      return { title: t('exportReadyTitle'), message: sentences(...repair, ...smaller, 'exportReadyMessage') };
     }
     const estimate = readyPart.estimate ? [readyPart.estimate.rest ? 'backupEstimateRest' : 'backupEstimateTotal'] : [];
     return {
       title: t(readyPart.purpose === 'safety' ? 'safetyPartReadyTitle' : 'exportPartReadyTitle', values),
       message: sentences(
+        ...repair,
         ...smaller,
         'exportPartReadyMessage',
         ...estimate,

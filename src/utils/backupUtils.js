@@ -433,10 +433,13 @@ export async function* createBackupParts({ items, wishlist, terms = [] }, {
       if (index < start) continue;
       const photos = [];
       for (const stored of getPhotos(record).filter(photo => photo instanceof Blob)) {
+        // `preparePhoto` returns null for a photo that cannot be read; it is left out.
         const photo = await preparePhoto(stored);
-        if (!PHOTO_EXTENSIONS[photo.type]) throw new Error(`Unsupported photo type: ${photo.type || 'unknown'}`);
-        if (photo.size > BACKUP_LIMITS.maxPhotoBytes) throw new Error('Photo exceeds backup size limit');
-        photos.push(photo);
+        if (photo) {
+          if (!PHOTO_EXTENSIONS[photo.type]) throw new Error(`Unsupported photo type: ${photo.type || 'unknown'}`);
+          if (photo.size > BACKUP_LIMITS.maxPhotoBytes) throw new Error('Photo exceeds backup size limit');
+          photos.push(photo);
+        }
         onPhotoDone();
       }
 
@@ -741,6 +744,95 @@ export async function rehydrateBackupFiles(files) {
     terms.push(...part.terms);
   }
   return { items, wishlist, terms };
+}
+
+// Safari (WebKit) can store a photo restored from a backup archive as a copy of the whole
+// archive file: the photo still says its own size, but reads as the archive. It then cannot
+// be shown at full size, and a new backup grows by the archive's size for every such photo
+// (a part of "100 MB" came out at 2.5 GB). The photo is still inside that copy, at the place
+// the archive's directory names, so it can be taken out again.
+
+// A photo stored that way reads as more bytes than it says it has.
+export function isDetachedPhoto(photo) {
+  return photo instanceof Blob && new Blob([photo]).size !== photo.size;
+}
+
+async function detachedArchive(photo) {
+  const whole = new Blob([photo]);
+  if (!(await isZip(whole))) return null;
+  const archive = await readZip(whole);
+  if (!archive.has(BACKUP_DATA_FILE)) return null;
+  let payload = null;
+  try {
+    payload = parseBackupText(await archive.text(BACKUP_DATA_FILE));
+  } catch {
+    // The photos can still be found by size.
+  }
+  return { archive, payload };
+}
+
+// Where the photo is in the archive: the path its record lists at the photo's place, or else
+// the one photo of the archive with the photo's size.
+function detachedPhotoPath({ archive, payload }, photo, hint) {
+  const records = hint && Array.isArray(payload?.[hint.section]) ? payload[hint.section] : [];
+  const listed = records.find(record => record?.id === hint.id)?.photos?.[hint.index];
+  if (typeof listed === 'string' && archive.size(listed) === photo.size) return listed;
+
+  const sameSize = archive.names.filter(name => name.startsWith('photos/') && archive.size(name) === photo.size);
+  return sameSize.length === 1 ? sameSize[0] : null;
+}
+
+// The photo itself, taken out of the archive copy it was stored as, or null when it cannot be
+// found there. `hint` is `{ section, id, index }`: the record the photo belongs to and its
+// place among the record's photos.
+export async function recoverDetachedPhoto(photo, hint = null) {
+  try {
+    const found = await detachedArchive(photo);
+    if (!found) return null;
+    const path = detachedPhotoPath(found, photo, hint);
+    if (!path) return null;
+    const type = PHOTO_TYPES[path.slice(path.lastIndexOf('.') + 1)] ?? photo.type;
+    const bytes = new Uint8Array(await (await found.archive.file(path, type)).arrayBuffer());
+    if (bytes.length !== photo.size || !hasMatchingImageSignature(type, bytes.subarray(0, 12))) return null;
+    // A copy held in memory is stored as itself.
+    return new Blob([bytes], { type: photo.type || type });
+  } catch {
+    return null;
+  }
+}
+
+// Repairs the photos of every record stored as an archive copy: each is taken out of its
+// copy and stored on its own, one record at a time. A photo that cannot be recovered is left
+// as it is. Returns how many were repaired and how many could not be.
+export async function repairDetachedPhotos(db, { onProgress = () => {} } = {}) {
+  const result = { repaired: 0, failed: 0 };
+  const tables = [['items', db.items], ['wishlist', db.wishlist]].filter(([, table]) => table);
+  for (const [section, table] of tables) {
+    const records = await table.toArray();
+    for (const [position, record] of records.entries()) {
+      onProgress({ section, done: position, total: records.length });
+      if (!Array.isArray(record.photos) || !record.photos.some(isDetachedPhoto)) continue;
+
+      let changed = false;
+      const photos = [];
+      for (const [index, photo] of record.photos.entries()) {
+        if (!isDetachedPhoto(photo)) {
+          photos.push(photo);
+          continue;
+        }
+        const recovered = await recoverDetachedPhoto(photo, { section, id: record.id, index });
+        photos.push(recovered ?? photo);
+        if (recovered) {
+          changed = true;
+          result.repaired += 1;
+        } else {
+          result.failed += 1;
+        }
+      }
+      if (changed) await table.update(record.id, { photos });
+    }
+  }
+  return result;
 }
 
 // Replaces the collection, the wishlist when the backup has one, and the saved list

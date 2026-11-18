@@ -811,6 +811,156 @@ photoTest('on an iPhone, continues a backup that stopped part way after the app 
   expect(await storedPhotoSizes(page)).toEqual([100_000, 100_000, 100_000, 100_000]);
 });
 
+// Each stored photo: whether it reads as more bytes than it says it has (a copy of a whole
+// backup archive), and whether it decodes as an image.
+function storedPhotoState(page) {
+  return page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('acg-merch-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      database.transaction('items').objectStore('items').getAll().onsuccess = async (event) => {
+        const photos = event.target.result.flatMap(item => item.photos);
+        database.close();
+        const decodes = await Promise.all(photos.map(photo => createImageBitmap(photo).then(
+          (bitmap) => { bitmap.close(); return true; },
+          () => false,
+        )));
+        resolve({
+          count: photos.length,
+          detached: photos.filter(photo => new Blob([photo]).size !== photo.size).length,
+          decoded: decodes.filter(Boolean).length,
+        });
+      };
+    };
+    request.onerror = () => reject(request.error);
+  }));
+}
+
+photoTest('repairs photos that a restore stored as copies of the backup, and backs up the photos themselves', async ({ page }, testInfo) => {
+  photoTest.slow(true, 'Backs up, restores and backs up again a dozen real photos');
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    });
+    window.sharedFiles = [];
+    navigator.canShare = () => true;
+    navigator.share = async ({ files: [file] }) => {
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+      window.sharedFiles.push({ name: file.name, size: file.size, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) });
+    };
+  });
+  await useEnglish(page);
+  // A dozen real photos, small enough to be backed up as they are.
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    (async () => {
+      const photos = [];
+      for (let index = 0; index < 12; index += 1) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 600;
+        canvas.height = 800;
+        const context = canvas.getContext('2d');
+        context.fillStyle = `hsl(${index * 30} 60% 55%)`;
+        context.fillRect(0, 0, 600, 800);
+        for (let square = 0; square < 400; square += 1) {
+          context.fillStyle = `hsl(${(index * 30 + square) % 360} 60% 45%)`;
+          context.fillRect((square * 37) % 600, (square * 53) % 800, 24, 24);
+        }
+        photos.push(await new Promise(done => canvas.toBlob(done, 'image/jpeg', 0.9)));
+      }
+      const request = indexedDB.open('acg-merch-db');
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('items', 'readwrite');
+        photos.forEach((photo, index) => {
+          const now = new Date(Date.now() - index * 1000);
+          transaction.objectStore('items').add({
+            series: ['Restored'], character: [`Restored ${index + 1}`], merchandise_type: 'figure', notes: '',
+            photos: [new File([photo], `IMG_${index}.JPG`, { type: 'image/jpeg' })], created_at: now, updated_at: now,
+          });
+        });
+        transaction.oncomplete = () => { database.close(); resolve(); };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      request.onerror = () => reject(request.error);
+    })().catch(reject);
+  }));
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+
+  const saveEverything = async () => {
+    await page.evaluate(() => { window.sharedFiles = []; });
+    await page.getByRole('button', { name: 'Export Backup' }).click();
+    const messages = [];
+    for (let guard = 0; guard < 60; guard += 1) {
+      const dialog = page.getByRole('dialog').first();
+      await expect(dialog).toBeVisible({ timeout: 30_000 });
+      const title = await dialog.getByRole('heading').innerText();
+      messages.push(await dialog.innerText());
+      if (!/is ready|Backup ready/.test(title)) {
+        await dialog.getByRole('button', { name: 'Close' }).click();
+        break;
+      }
+      await page.getByRole('button', { name: 'Save' }).click();
+    }
+    return { messages, files: await page.evaluate(() => window.sharedFiles) };
+  };
+
+  // 1. One backup file, kept on disk.
+  const first = await saveEverything();
+  expect(first.files).toHaveLength(1);
+  const backupPath = testInfo.outputPath(first.files[0].name);
+  await writeFile(backupPath, Buffer.from(first.files[0].base64, 'base64'));
+  const photoBytes = (await storedPhotoSizes(page)).reduce((total, size) => total + size, 0);
+
+  // 2. Restored from that file; in WebKit each photo is now stored as a copy of the backup.
+  await clearCollection(page);
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(backupPath);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  const restored = await storedPhotoState(page);
+  expect(restored.count).toBe(12);
+
+  // 3. A new backup in small files: damaged photos are repaired first, and no file grows by
+  // the size of the old backup.
+  await page.evaluate(() => sessionStorage.setItem('acgBackupPartBytes', '400000'));
+  const second = await saveEverything();
+  if (restored.detached > 0) {
+    expect(second.messages[0]).toContain(`${restored.detached} photo(s) restored from an earlier backup were damaged on this device and have been repaired.`);
+  }
+  expect(second.files.length).toBeGreaterThan(1);
+  for (const file of second.files) expect(file.size).toBeLessThan(400_000 + 250_000);
+  expect(second.files.reduce((total, file) => total + file.size, 0)).toBeLessThan(photoBytes + 100_000);
+
+  // 4. After a reload every photo is stored as itself and shows.
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  // 5. The new files restore.
+  const paths = [];
+  for (const file of second.files) {
+    const path = testInfo.outputPath(`second-${file.name}`);
+    await writeFile(path, Buffer.from(file.base64, 'base64'));
+    paths.push(path);
+  }
+  await clearCollection(page);
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(paths);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+});
+
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {
   await useEnglish(page);
 

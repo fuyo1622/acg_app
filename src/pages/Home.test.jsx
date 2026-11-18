@@ -13,6 +13,7 @@ import Home from './Home';
 const dbMocks = vi.hoisted(() => ({
   items: {
     toArray: vi.fn(),
+    update: vi.fn(),
     orderBy: vi.fn(() => ({
       reverse: vi.fn(() => ({
         toArray: vi.fn(),
@@ -21,6 +22,7 @@ const dbMocks = vi.hoisted(() => ({
   },
   wishlist: {
     toArray: vi.fn(),
+    update: vi.fn(),
   },
   terms: {
     toArray: vi.fn(),
@@ -68,8 +70,8 @@ function collectionItem(id, photoBytes) {
   let photo = null;
 
   if (photoBytes) {
-    photo = new Blob(['photo'], { type: 'image/webp' });
-    Object.defineProperty(photo, 'size', { value: photoBytes });
+    // Real bytes: a photo that only says it is larger reads like one stored as an archive copy.
+    photo = new Blob([new Uint8Array(photoBytes)], { type: 'image/webp' });
   }
 
   return {
@@ -510,12 +512,13 @@ describe('Home smoke flows', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
 
-    expect(await screen.findByText('Working on the backup… Large ones take a while.')).toBeInTheDocument();
+    // First the photos are checked for damage (see repairDetachedPhotos).
+    expect(await screen.findByText('Checking photos before the backup…')).toBeInTheDocument();
     finishReading([collectionItem(1, 0)]);
     await waitFor(() => {
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
-    expect(screen.queryByText(/Working on the backup/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Working on the backup|Checking photos/)).not.toBeInTheDocument();
   });
 
   describe('on an iPhone', () => {
@@ -599,6 +602,40 @@ describe('Home smoke flows', () => {
       });
       expect(await screen.findByRole('dialog', { name: 'Where to find the backup' }))
         .toHaveTextContent('Downloads folder');
+    });
+
+    it('repairs photos stored as copies of a whole backup archive, and backs up the photos themselves', async () => {
+      const signature = Uint8Array.from(atob('iVBORw0KGgo='), character => character.charCodeAt(0));
+      const bytes = new Uint8Array(300).fill(9);
+      bytes.set(signature);
+      const photo = new Blob([bytes], { type: 'image/png' });
+      const { value: earlier } = await createBackupParts(
+        { items: [{ ...collectionItem(1, 0), photos: [photo] }], wishlist: [] },
+        { partBytes: Infinity },
+      ).next();
+      // What Safari left after that backup was restored: the whole archive, saying it is the photo.
+      const stored = new Blob([earlier.blob], { type: 'image/png' });
+      Object.defineProperty(stored, 'size', { value: photo.size });
+      dbMocks.items.toArray.mockResolvedValue([{ ...collectionItem(1, 0), photos: [stored] }]);
+      dbMocks.items.update.mockResolvedValue(1);
+      renderHome();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+      const ready = await screen.findByRole('dialog', { name: 'Backup ready' });
+      expect(ready).toHaveTextContent('1 photo(s) restored from an earlier backup were damaged on this device and have been repaired.');
+      const [id, { photos: [repaired] }] = dbMocks.items.update.mock.calls[0];
+      expect(id).toBe(1);
+      expect(Array.from(new Uint8Array(await repaired.arrayBuffer()))).toEqual(Array.from(bytes));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      const [{ files: [file] }] = navigator.share.mock.calls[0];
+      // The photo itself, not the archive it was a copy of.
+      expect(file.size).toBeLessThan(earlier.blob.size + 1000);
+      const archive = await readZip(file);
+      expect(archive.size('photos/items/0001-1.png')).toBe(300);
+      expect(Array.from(new Uint8Array(await (await archive.file('photos/items/0001-1.png')).arrayBuffer())))
+        .toEqual(Array.from(bytes));
     });
 
     it('asks before replacing data when the safety backup was not saved', async () => {
