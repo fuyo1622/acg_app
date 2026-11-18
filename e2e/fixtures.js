@@ -53,23 +53,51 @@ export function solidPng(name, width, height) {
 // folder: WebKit nests its IndexedDB files deeply, and below the test output folder they
 // would pass the Windows path limit and fail to open.
 export const photoTest = test.extend({
-  page: async ({ page, browserName, playwright, baseURL, viewport, userAgent, deviceScaleFactor }, use) => {
+  webkitProfile: async ({ browserName, playwright, baseURL, viewport, userAgent, deviceScaleFactor }, use) => {
     if (browserName !== 'webkit') {
-      await use(page);
+      await use(null);
       return;
     }
 
     const profileDir = await mkdtemp(join(tmpdir(), 'acg-webkit-'));
-    const context = await playwright.webkit.launchPersistentContext(profileDir, {
+    const launch = () => playwright.webkit.launchPersistentContext(profileDir, {
       baseURL,
       viewport,
       userAgent,
       deviceScaleFactor,
     });
-    await use(context.pages()[0] ?? await context.newPage());
-    await context.close();
+    const profile = { context: await launch() };
+    profile.restart = async () => {
+      await profile.context.close();
+      profile.context = await launch();
+      return profile.context.pages()[0] ?? profile.context.newPage();
+    };
+    await use(profile);
+    await profile.context.close();
     // On Windows, WebKit can hold its database files for a moment after closing. A
     // leftover folder in the system temp directory is harmless, so cleanup never fails a test.
     await rm(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => {});
+  },
+
+  page: async ({ page, webkitProfile }, use) => {
+    await use(webkitProfile ? webkitProfile.context.pages()[0] ?? await webkitProfile.context.newPage() : page);
+  },
+
+  // Closes the app and opens it again, and returns the page to go on with; `prepare` sets up
+  // the new page before it opens the app. In WebKit this starts the browser again on the same
+  // profile: after a reload WebKit can still serve a Blob from its own copy for a while, so
+  // only a new start shows what is stored on disk, as an app closed on a phone does. Other
+  // browsers' test profiles end with the browser, and there the page is reloaded.
+  reopenApp: async ({ webkitProfile }, use) => {
+    await use(async (page, prepare = async () => {}) => {
+      if (!webkitProfile) {
+        await page.reload();
+        return page;
+      }
+      const reopened = await webkitProfile.restart();
+      await prepare(reopened);
+      await reopened.goto('/');
+      return reopened;
+    });
   },
 });
