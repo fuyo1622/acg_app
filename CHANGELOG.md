@@ -6,6 +6,20 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-11-18
+
+### Fixed
+
+- A backup in several files that stopped part way had to start over, and the files saved
+  until then were of no use. On an iPhone this happened after about 2.5 GB: once the phone
+  is low on space, the share sheet takes no more files. A backup now remembers how far it
+  got: after space is freed or the app is opened again, Export Backup offers to continue
+  from the next file, as the same backup, or to start over. It is not continued if the
+  collection or wishlist changed in between.
+- When the share sheet cannot take a file even after it was made smaller (now down to about
+  25 MB), the message says the likely cause, how much space the rest of the backup needs,
+  and how to go on. The first file's dialog says how much space the whole backup will take.
+
 ## [0.6.3] - 2026-11-12
 
 ### Fixed

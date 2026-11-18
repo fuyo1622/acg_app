@@ -45,4 +45,31 @@ describe('AppDialog accessibility', () => {
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus();
   });
+
+  it('offers a third choice between cancelling and confirming, and Escape still only cancels', () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const onSecondary = vi.fn();
+    render(
+      <AppDialog
+        open
+        title="Continue the last backup?"
+        message="2 files are saved."
+        confirmLabel="Continue"
+        cancelLabel="Cancel"
+        secondaryLabel="Start over"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+        onSecondary={onSecondary}
+      />,
+    );
+
+    expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Cancel', 'Start over', 'Continue']);
+    expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Start over' }));
+    expect(onSecondary).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });

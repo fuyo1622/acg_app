@@ -372,10 +372,16 @@ function groupRecords(records, limit) {
 // A part that could not be saved can be asked for again in smaller parts: answering it with
 // `next({ partBytes })` instead of `next()` makes its records again as parts of that size,
 // numbered from its own number on, and the parts after them keep that size.
+//
+// Each part also says which backup it belongs to (`backup`), how many photos it holds, and
+// `position`: how many records, items first, the parts up to it hold. A backup stopped
+// after a part can be continued later with `resume: { id, number, position }`, the next
+// part's number and the position of the last part saved, as long as the records are the same.
 export async function* createBackupParts({ items, wishlist }, {
   partBytes = BACKUP_PART_BYTES,
   preparePhoto = photo => photo,
   onPhotoDone = () => {},
+  resume = null,
 } = {}) {
   if (!Array.isArray(items) || items.length > BACKUP_LIMITS.maxItems) {
     throw new Error('Collection exceeds backup item limit');
@@ -384,13 +390,20 @@ export async function* createBackupParts({ items, wishlist }, {
     throw new Error('Wishlist exceeds backup entry limit');
   }
 
-  const id = createBackupId();
+  const id = resume?.id ?? createBackupId();
+  const start = resume?.position ?? 0;
   let limit = partBytes;
-  let number = 1;
+  let number = resume?.number ?? 1;
 
   // Offers `records` as part `number`, and again in smaller parts for as long as it is asked.
   async function* offer(records, totals) {
-    const request = yield await archivePart(records, { id, number, totals });
+    const part = await archivePart(records, { id, number, totals });
+    const request = yield {
+      ...part,
+      backup: id,
+      photos: records.reduce((total, record) => total + record.photos.length, 0),
+      position: records.length > 0 ? records.at(-1).index + 1 : start,
+    };
     if (!(request?.partBytes > 0)) {
       number += 1;
       return;
@@ -407,9 +420,11 @@ export async function* createBackupParts({ items, wishlist }, {
 
   let pending = [];
   let pendingBytes = 0;
-  const sections = [['items', items, itemMetadata], ['wishlist', wishlist, wishlistMetadata]];
-  for (const [section, sectionRecords, toMetadata] of sections) {
-    for (const record of sectionRecords) {
+  const sections = [['items', items, itemMetadata, 0], ['wishlist', wishlist, wishlistMetadata, items.length]];
+  for (const [section, sectionRecords, toMetadata, firstIndex] of sections) {
+    for (const [offset, record] of sectionRecords.entries()) {
+      const index = firstIndex + offset;
+      if (index < start) continue;
       const photos = [];
       for (const stored of getPhotos(record).filter(photo => photo instanceof Blob)) {
         const photo = await preparePhoto(stored);
@@ -425,7 +440,7 @@ export async function* createBackupParts({ items, wishlist }, {
         pending = [];
         pendingBytes = 0;
       }
-      pending.push({ section, metadata: toMetadata(record), photos, bytes });
+      pending.push({ section, index, metadata: toMetadata(record), photos, bytes });
       pendingBytes += bytes;
     }
   }
