@@ -13,7 +13,7 @@ import Home from './Home';
 const dbMocks = vi.hoisted(() => ({
   items: {
     toArray: vi.fn(),
-    update: vi.fn(),
+    put: vi.fn(),
     orderBy: vi.fn(() => ({
       reverse: vi.fn(() => ({
         toArray: vi.fn(),
@@ -22,7 +22,7 @@ const dbMocks = vi.hoisted(() => ({
   },
   wishlist: {
     toArray: vi.fn(),
-    update: vi.fn(),
+    put: vi.fn(),
   },
   transaction: vi.fn(),
 }));
@@ -313,7 +313,7 @@ describe('Home smoke flows', () => {
           }),
         ],
         wishlist: undefined,
-      });
+      }, expect.objectContaining({ onProgress: expect.any(Function) }));
     });
   });
 
@@ -350,7 +350,7 @@ describe('Home smoke flows', () => {
       expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
         items: [],
         wishlist: [expect.objectContaining({ id: 4, name: 'Imported wish', status: 'ordered' })],
-      });
+      }, expect.objectContaining({ onProgress: expect.any(Function) }));
     });
   });
 
@@ -588,14 +588,14 @@ describe('Home smoke flows', () => {
       const stored = new Blob([earlier.blob], { type: 'image/png' });
       Object.defineProperty(stored, 'size', { value: photo.size });
       dbMocks.items.toArray.mockResolvedValue([{ ...collectionItem(1, 0), photos: [stored] }]);
-      dbMocks.items.update.mockResolvedValue(1);
+      dbMocks.items.put.mockResolvedValue(1);
       renderHome();
 
       fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
 
       const ready = await screen.findByRole('dialog', { name: 'Backup ready' });
       expect(ready).toHaveTextContent('1 photo(s) restored from an earlier backup were damaged on this device and have been repaired.');
-      const [id, { photos: [repaired] }] = dbMocks.items.update.mock.calls[0];
+      const [{ id, photos: [repaired] }] = dbMocks.items.put.mock.calls[0];
       expect(id).toBe(1);
       expect(Array.from(new Uint8Array(await repaired.arrayBuffer()))).toEqual(Array.from(bytes));
 
@@ -631,7 +631,7 @@ describe('Home smoke flows', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Replace anyway' }));
 
       await waitFor(() => {
-        expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined });
+        expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined }, expect.objectContaining({ onProgress: expect.any(Function) }));
       });
     });
 
@@ -815,7 +815,7 @@ describe('Home smoke flows', () => {
         }
 
         await waitFor(() => {
-          expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined });
+          expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined }, expect.objectContaining({ onProgress: expect.any(Function) }));
         });
         expect(navigator.share).toHaveBeenCalledTimes(5);
       });
@@ -917,6 +917,53 @@ describe('Home smoke flows', () => {
     });
   });
 
+  describe('a restore that does not finish', () => {
+    const importOldBackup = async () => {
+      const importFile = new File([JSON.stringify({ version: 2, items: [] })], 'backup.json', { type: 'application/json' });
+      fireEvent.change(screen.getByLabelText('Import backup file'), { target: { files: [importFile] } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+    };
+
+    afterEach(() => {
+      localStorage.removeItem('acgRestoreUnfinished');
+    });
+
+    it('says when only part of the backup was restored, and keeps saying so at the next start', async () => {
+      backupMocks.replaceBackupInDb.mockRejectedValue(
+        Object.assign(new Error('The backup was restored only in part'), { partial: true }),
+      );
+      renderHome();
+
+      await importOldBackup();
+
+      expect(await screen.findByRole('dialog', { name: 'Restored only in part' }))
+        .toHaveTextContent('Import the backup again, choosing all of its files.');
+      expect(localStorage.getItem('acgRestoreUnfinished')).toBe('true');
+    });
+
+    it('says at start that the app was closed during a restore, once', async () => {
+      localStorage.setItem('acgRestoreUnfinished', 'true');
+      renderHome();
+
+      expect(await screen.findByRole('dialog', { name: 'The last restore did not finish' }))
+        .toHaveTextContent('only part of it may be in the app');
+      expect(localStorage.getItem('acgRestoreUnfinished')).toBeNull();
+    });
+
+    it('forgets the restore once it is done, or when it changed nothing', async () => {
+      renderHome();
+      await importOldBackup();
+      expect(await screen.findByRole('dialog', { name: 'Completed' })).toBeInTheDocument();
+      expect(localStorage.getItem('acgRestoreUnfinished')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+      backupMocks.replaceBackupInDb.mockRejectedValue(new Error('bulk add failed'));
+      await importOldBackup();
+      expect(await screen.findByRole('dialog', { name: 'Something went wrong' })).toBeInTheDocument();
+      expect(localStorage.getItem('acgRestoreUnfinished')).toBeNull();
+    });
+  });
+
   describe('restoring a backup saved in several files', () => {
     // Three items with a real, tiny PNG each, saved one item per file.
     async function backupParts() {
@@ -945,7 +992,7 @@ describe('Home smoke flows', () => {
         expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
           items: [expect.objectContaining({ id: 1 }), expect.objectContaining({ id: 2 }), expect.objectContaining({ id: 3 })],
           wishlist: [],
-        });
+        }, expect.objectContaining({ onProgress: expect.any(Function) }));
       });
     });
 

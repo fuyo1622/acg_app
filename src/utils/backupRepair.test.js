@@ -82,7 +82,7 @@ describe('photos stored as copies of a whole backup archive', () => {
     const kept = photoOfSize(250, 7);
     const archive = await backupArchive({ items: [item(1, restored)], wishlist: [] });
     const lost = storedAsArchiveCopy(archive, photoOfSize(999));
-    const table = records => ({ toArray: vi.fn(async () => records), update: vi.fn(async () => 1) });
+    const table = records => ({ toArray: vi.fn(async () => records), put: vi.fn(async () => 1) });
     const db = {
       items: table([
         { id: 1, photos: [storedAsArchiveCopy(archive, restored), kept] },
@@ -96,8 +96,8 @@ describe('photos stored as copies of a whole backup archive', () => {
     const result = await repairDetachedPhotos(db, { onProgress });
 
     expect(result).toEqual({ repaired: 1, failed: 1 });
-    expect(db.items.update).toHaveBeenCalledTimes(1);
-    const [id, { photos }] = db.items.update.mock.calls[0];
+    expect(db.items.put).toHaveBeenCalledTimes(1);
+    const [{ id, photos }] = db.items.put.mock.calls[0];
     expect(id).toBe(1);
     expect(await bytesOf(photos[0])).toEqual(await bytesOf(restored));
     expect(photos[1]).toBe(kept);
