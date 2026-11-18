@@ -15,6 +15,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import AppDialog from './AppDialog';
 import {
   BACKUP_MIN_PART_BYTES,
+  BACKUP_RESTORE_BATCH_BYTES,
   BACKUP_PART_BYTES,
   BACKUP_SHARE_PART_BYTES,
   BACKUP_VERSION,
@@ -110,6 +111,7 @@ async function readBackupSections() {
 // Tests set these to get several parts, and smaller ones, out of a few small photos.
 const TEST_PART_BYTES_KEY = 'acgBackupPartBytes';
 const TEST_MIN_PART_BYTES_KEY = 'acgBackupMinPartBytes';
+const TEST_RESTORE_BATCH_BYTES_KEY = 'acgRestoreBatchBytes';
 
 function sizeSetting(testKey, fallback) {
   try {
@@ -125,6 +127,7 @@ const backupPartBytes = () => sizeSetting(
   usesShareSheet() ? BACKUP_SHARE_PART_BYTES : BACKUP_PART_BYTES,
 );
 const minimumPartBytes = () => sizeSetting(TEST_MIN_PART_BYTES_KEY, BACKUP_MIN_PART_BYTES);
+const restoreBatchBytes = () => sizeSetting(TEST_RESTORE_BATCH_BYTES_KEY, BACKUP_RESTORE_BATCH_BYTES);
 
 function countPhotos({ items, wishlist }) {
   return [...items, ...wishlist].reduce((total, record) => total + getPhotos(record).length, 0);
@@ -143,6 +146,27 @@ const isSingleFile = part => part.number === 1 && part.last;
 // app was closed, or after space was freed on the phone, instead of starting over:
 // { version, id, date, saved, position, photos, bytes, fingerprint }, `saved` files so far.
 const BACKUP_PROGRESS_KEY = 'acgBackupProgress';
+
+// Set while a restore stores its batches; still set at start means the app was closed during one.
+const RESTORE_MARK_KEY = 'acgRestoreUnfinished';
+let restoreRunning = false;
+
+function readRestoreMark() {
+  try {
+    return localStorage.getItem(RESTORE_MARK_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function setRestoreMark(on) {
+  try {
+    if (on) localStorage.setItem(RESTORE_MARK_KEY, 'true');
+    else localStorage.removeItem(RESTORE_MARK_KEY);
+  } catch {
+    // Without storage a cut-off restore is not reported later.
+  }
+}
 
 function readBackupProgress() {
   try {
@@ -285,6 +309,15 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   };
 
   useEffect(() => () => endBackupJob(), []);
+
+  // A restore cut off by closing the app (the mark is still there, and none is running).
+  useEffect(() => {
+    if (restoreRunning || !readRestoreMark()) return;
+    setRestoreMark(false);
+    setNotice({ title: t('restoreUnfinishedTitle'), message: t('restoreUnfinishedMessage') });
+    // Checked once, when the header first appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Starts saving `sections` as a backup. Its files are made one at a time, when asked for,
   // so only one file's photos are held at once. `resume` is the progress of a backup that
@@ -576,16 +609,32 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
+  // A large backup is restored in batches (see replaceBackupInDb). Until the last is stored, a
+  // mark says the restore is under way, so that one cut off by closing the app is reported.
   async function runImport({ opened }) {
     setIsProcessing(true);
+    restoreRunning = true;
+    setRestoreMark(true);
     try {
-      await replaceBackupInDb(db, await rehydrateBackupFiles(opened));
+      await replaceBackupInDb(db, await rehydrateBackupFiles(opened), {
+        batchBytes: restoreBatchBytes(),
+        onProgress: ({ done, total }) => setProgress({ restoring: true, done, total }),
+      });
+      setRestoreMark(false);
       setNotice({ title: t('successTitle'), message: t('importSuccess') });
       setStorageStatus(await getStorageStatus());
     } catch (error) {
       console.error(error);
-      showError('importError');
+      if (error?.partial) {
+        setNotice({ title: t('restorePartialTitle'), message: t('restorePartialMessage') });
+      } else {
+        // Nothing was changed.
+        setRestoreMark(false);
+        showError('importError');
+      }
     } finally {
+      restoreRunning = false;
+      setProgress(null);
       setIsProcessing(false);
     }
   }
@@ -662,6 +711,9 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   const formatCount = count => count.toLocaleString(storageLocale);
   const statusText = (() => {
     if (!isProcessing) return '';
+    if (progress?.restoring) {
+      return t('restoreProgress', { done: formatCount(progress.done), total: formatCount(progress.total) });
+    }
     if (progress?.checking) {
       if (!progress.total) return t('backupCheckingPhotosStart');
       return t('backupCheckingPhotos', {

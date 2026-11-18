@@ -780,8 +780,8 @@ function storedPhotoState(page) {
   }));
 }
 
-photoTest('repairs photos that a restore stored as copies of the backup, and backs up the photos themselves', async ({ page, browserName }, testInfo) => {
-  photoTest.slow(true, 'Backs up, restores and backs up again a dozen real photos');
+// An iPhone whose share sheet keeps every file it is given, in `sharedFiles`.
+async function useKeepingShareSheet(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'userAgent', {
       configurable: true,
@@ -798,8 +798,10 @@ photoTest('repairs photos that a restore stored as copies of the backup, and bac
       window.sharedFiles.push({ name: file.name, size: file.size, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) });
     };
   });
-  await useEnglish(page);
-  // A dozen real photos, small enough to be backed up as they are.
+}
+
+// A dozen real photos, small enough to be backed up as they are.
+async function seedRealPhotos(page) {
   await page.evaluate(() => new Promise((resolve, reject) => {
     (async () => {
       const photos = [];
@@ -835,85 +837,168 @@ photoTest('repairs photos that a restore stored as copies of the backup, and bac
   }));
   await page.reload();
   await expect(page.locator('.item-card')).toHaveCount(12);
+}
 
-  const saveEverything = async () => {
-    await page.evaluate(() => { window.sharedFiles = []; });
-    await page.getByRole('button', { name: 'Export Backup' }).click();
-    const messages = [];
-    for (let guard = 0; guard < 60; guard += 1) {
-      const dialog = page.getByRole('dialog').first();
-      await expect(dialog).toBeVisible({ timeout: 30_000 });
-      const title = await dialog.getByRole('heading').innerText();
-      messages.push(await dialog.innerText());
-      if (!/is ready|Backup ready/.test(title)) {
-        await dialog.getByRole('button', { name: 'Close' }).click();
-        break;
-      }
-      await page.getByRole('button', { name: 'Save' }).click();
+// Exports a backup and saves every file through the share sheet. Returns the text of each
+// dialog and the files, also written to disk with `prefix` before their names.
+async function saveEverything(page, testInfo, prefix) {
+  await page.evaluate(() => { window.sharedFiles = []; });
+  await page.getByRole('button', { name: 'Export Backup' }).click();
+  const messages = [];
+  for (let guard = 0; guard < 60; guard += 1) {
+    const dialog = page.getByRole('dialog').first();
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    const title = await dialog.getByRole('heading').innerText();
+    messages.push(await dialog.innerText());
+    if (!/is ready|Backup ready/.test(title)) {
+      await dialog.getByRole('button', { name: 'Close' }).click();
+      break;
     }
-    return { messages, files: await page.evaluate(() => window.sharedFiles) };
-  };
-
-  // 1. One backup file, kept on disk.
-  const first = await saveEverything();
-  expect(first.files).toHaveLength(1);
-  const backupPath = testInfo.outputPath(first.files[0].name);
-  await writeFile(backupPath, Buffer.from(first.files[0].base64, 'base64'));
-  const photoBytes = (await storedPhotoSizes(page)).reduce((total, size) => total + size, 0);
-
-  // 2. Restored from that file; in WebKit each photo is now stored as a copy of the backup.
-  await clearCollection(page);
-  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
-  await page.getByLabel('Import backup file').setInputFiles(backupPath);
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Close' }).click();
-  await page.reload();
-  await expect(page.locator('.item-card')).toHaveCount(12);
-  const restored = await storedPhotoState(page);
-  expect(restored.count).toBe(12);
-
-  // 3. A new backup in small files: damaged photos are repaired first, and no file grows by
-  // the size of the old backup.
-  await page.evaluate(() => sessionStorage.setItem('acgBackupPartBytes', '400000'));
-  const backUpInSmallFiles = async () => {
-    const backup = await saveEverything();
-    expect(backup.files.length).toBeGreaterThan(1);
-    for (const file of backup.files) expect(file.size).toBeLessThan(400_000 + 250_000);
-    expect(backup.files.reduce((total, file) => total + file.size, 0)).toBeLessThan(photoBytes + 100_000);
-    return backup;
-  };
-  const second = await backUpInSmallFiles();
-  if (restored.detached > 0) {
-    expect(second.messages[0]).toContain('photo(s) restored from an earlier backup were damaged on this device and have been repaired.');
+    await page.getByRole('button', { name: 'Save' }).click();
   }
-
-  // 4. After a reload the repaired photos are stored as themselves and show. WebKit on Linux
-  // (GitHub's runner) did not keep them (2026-11-18); there each backup repairs them again,
-  // which the next backup checks.
-  await page.reload();
-  await expect(page.locator('.item-card')).toHaveCount(12);
-  const repaired = await storedPhotoState(page);
-  expect(repaired.count).toBe(12);
-  if (!(browserName === 'webkit' && process.platform === 'linux')) {
-    expect(repaired).toEqual({ count: 12, detached: 0, decoded: 12 });
-  }
-  const third = await backUpInSmallFiles();
-
-  // 5. The new files restore.
+  const files = await page.evaluate(() => window.sharedFiles);
   const paths = [];
-  for (const file of third.files) {
-    const path = testInfo.outputPath(`third-${file.name}`);
-    await writeFile(path, Buffer.from(file.base64, 'base64'));
-    paths.push(path);
+  for (const file of files) {
+    const filePath = testInfo.outputPath(`${prefix}-${file.name}`);
+    await writeFile(filePath, Buffer.from(file.base64, 'base64'));
+    paths.push(filePath);
   }
-  await clearCollection(page);
+  return { messages, files, paths };
+}
+
+async function importBackupFiles(page, paths) {
   await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
   await page.getByLabel('Import backup file').setInputFiles(paths);
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Close' }).click();
+}
+
+// Restores a backup file the way the app did up to 0.6.5, which Safari stores as copies of the
+// whole file: each photo is a slice of the chosen file, of which only some parts are read.
+async function restoreAsBefore066(page, backupPath) {
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.id = 'old-restore';
+    document.body.append(input);
+  });
+  await page.setInputFiles('#old-restore', backupPath);
+  await page.evaluate(async () => {
+    const file = document.getElementById('old-restore').files[0];
+    const read = async (start, end) => new Uint8Array(await file.slice(start, end).arrayBuffer());
+    const tail = await read(Math.max(0, file.size - 22 - 65535), file.size);
+    let last = tail.length - 22;
+    while (last >= 0 && !(tail[last] === 0x50 && tail[last + 1] === 0x4b && tail[last + 2] === 5 && tail[last + 3] === 6)) last -= 1;
+    const ending = new DataView(tail.buffer, last);
+    const directoryOffset = ending.getUint32(16, true);
+    const directory = await read(directoryOffset, directoryOffset + ending.getUint32(12, true));
+    const view = new DataView(directory.buffer);
+    const entries = new Map();
+    for (let index = 0, position = 0; index < ending.getUint16(10, true); index += 1) {
+      const nameLength = view.getUint16(position + 28, true);
+      const name = new TextDecoder().decode(directory.subarray(position + 46, position + 46 + nameLength));
+      entries.set(name, { size: view.getUint32(position + 24, true), headerOffset: view.getUint32(position + 42, true) });
+      position += 46 + nameLength + view.getUint16(position + 30, true) + view.getUint16(position + 32, true);
+    }
+    const slice = async (name, type) => {
+      const { size, headerOffset } = entries.get(name);
+      const header = new DataView((await read(headerOffset, headerOffset + 30)).buffer);
+      const dataStart = headerOffset + 30 + header.getUint16(26, true) + header.getUint16(28, true);
+      return file.slice(dataStart, dataStart + size, type);
+    };
+    const backup = JSON.parse(await (await slice('backup.json')).text());
+    const records = [];
+    for (const item of backup.items) {
+      records.push({
+        ...item,
+        created_at: new Date(item.created_at),
+        updated_at: new Date(item.updated_at),
+        photos: await Promise.all(item.photos.map(photo => slice(photo, 'image/jpeg'))),
+      });
+    }
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open('acg-merch-db');
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('items', 'readwrite');
+        transaction.objectStore('items').clear();
+        records.forEach(record => transaction.objectStore('items').add(record));
+        transaction.oncomplete = () => { database.close(); resolve(); };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  });
+  await page.reload();
   await expect(page.locator('.item-card')).toHaveCount(12);
+}
+
+photoTest('restores photos as themselves, in batches, so they stay whole after the app is reopened', async ({ page }, testInfo) => {
+  photoTest.slow(true, 'Backs up, restores and backs up again a dozen real photos');
+  await useKeepingShareSheet(page);
+  await useEnglish(page);
+  await seedRealPhotos(page);
+  const first = await saveEverything(page, testInfo, 'first');
+  expect(first.files).toHaveLength(1);
+
+  // Batches of a few photos each, so the restore stores several of them.
+  await clearCollection(page);
+  await page.evaluate(() => sessionStorage.setItem('acgRestoreBatchBytes', '300000'));
+  await importBackupFiles(page, first.paths);
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  // Nothing to repair: the next backup is the size of the photos.
+  const photoBytes = (await storedPhotoSizes(page)).reduce((total, size) => total + size, 0);
+  const second = await saveEverything(page, testInfo, 'second');
+  expect(second.messages[0]).not.toContain('have been repaired');
+  expect(second.files.reduce((total, file) => total + file.size, 0)).toBeLessThan(photoBytes + 100_000);
+});
+
+photoTest('repairs photos that earlier restores stored as copies of the backup, and backs up the photos themselves', async ({ page, browserName }, testInfo) => {
+  photoTest.slow(true, 'Backs up, restores and backs up again a dozen real photos');
+  await useKeepingShareSheet(page);
+  await useEnglish(page);
+  await seedRealPhotos(page);
+  const first = await saveEverything(page, testInfo, 'first');
+  expect(first.files).toHaveLength(1);
+  const photoBytes = (await storedPhotoSizes(page)).reduce((total, size) => total + size, 0);
+
+  // Restored the old way; in WebKit that stores the photos as copies of the backup file.
+  await restoreAsBefore066(page, first.paths[0]);
+  const restored = await storedPhotoState(page);
+  expect(restored.count).toBe(12);
+  if (browserName === 'webkit') expect(restored.detached).toBeGreaterThan(0);
+
+  // A new backup in small files: damaged photos are repaired first, and no file grows by
+  // the size of the old backup.
+  await page.evaluate(() => sessionStorage.setItem('acgBackupPartBytes', '400000'));
+  const backUpInSmallFiles = async (prefix) => {
+    const backup = await saveEverything(page, testInfo, prefix);
+    expect(backup.files.length).toBeGreaterThan(1);
+    for (const file of backup.files) expect(file.size).toBeLessThan(400_000 + 250_000);
+    expect(backup.files.reduce((total, file) => total + file.size, 0)).toBeLessThan(photoBytes + 100_000);
+    return backup;
+  };
+  const second = await backUpInSmallFiles('second');
+  if (restored.detached > 0) {
+    expect(second.messages[0]).toContain('photo(s) restored from an earlier backup were damaged on this device and have been repaired.');
+  }
+
+  // After a reload the repaired photos are stored as themselves and show.
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  // The next backup restores, and its photos stay whole.
+  const third = await backUpInSmallFiles('third');
+  await clearCollection(page);
+  await importBackupFiles(page, third.paths);
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
 });
 
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {

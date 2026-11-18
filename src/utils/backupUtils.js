@@ -8,6 +8,7 @@ import {
   BACKUP_CONCURRENCY,
   BACKUP_LIMITS,
   BACKUP_PART_BYTES,
+  BACKUP_RESTORE_BATCH_BYTES,
   BACKUP_VERSION,
   DEFAULT_WISHLIST_CURRENCY,
   PARTED_BACKUP_VERSION,
@@ -796,24 +797,81 @@ export async function repairDetachedPhotos(db, { onProgress = () => {} } = {}) {
           result.failed += 1;
         }
       }
-      if (changed) await table.update(record.id, { photos });
+      // The whole record is put back: WebKit on Linux did not keep photos changed by an update.
+      if (changed) await table.put({ ...record, photos });
     }
   }
   return result;
 }
 
-// Replaces the collection, and the wishlist when the backup has one, in one transaction,
-// so a failure leaves both tables as they were.
-export async function replaceBackupInDb(db, { items, wishlist }) {
+// A photo read out of the file it came from and held as itself: Safari stores a photo that is
+// a slice of a chosen file as a copy of the whole file (see isDetachedPhoto).
+async function ownCopy(photo) {
+  return photo instanceof Blob ? new Blob([await photo.arrayBuffer()], { type: photo.type }) : photo;
+}
+
+const photoBytesOf = record => getPhotos(record)
+  .reduce((total, photo) => total + (photo instanceof Blob ? photo.size : 0), 0);
+
+// Replaces the collection, and the wishlist when the backup has one. A restored backup's
+// photos are slices of its files, so each is copied before it is stored (see ownCopy); to hold
+// only some of those copies at a time, the records are stored in batches of about `batchBytes`
+// of photos, each in a transaction of its own. The first batch also empties the tables, so a
+// backup that fits one batch is restored at once or not at all, and a failure in the first
+// batch leaves the tables as they were. A failure after it leaves the backup restored in
+// part, and is thrown with `partial: true`. `onProgress` hears how many records are stored.
+export async function replaceBackupInDb(db, { items, wishlist }, {
+  batchBytes = BACKUP_RESTORE_BATCH_BYTES,
+  onProgress = () => {},
+} = {}) {
   const tables = wishlist ? [db.items, db.wishlist] : [db.items];
-
-  await db.transaction('rw', tables, async () => {
+  const emptyTables = async () => {
     await db.items.clear();
-    await db.items.bulkAdd(items);
+    if (wishlist) await db.wishlist.clear();
+  };
 
-    if (wishlist) {
-      await db.wishlist.clear();
-      await db.wishlist.bulkAdd(wishlist);
+  // Consecutive records of one table, up to about batchBytes of photos in each batch.
+  const batches = [];
+  let batchPhotoBytes = 0;
+  const entries = [
+    ...items.map(record => ({ table: db.items, record })),
+    ...(wishlist ?? []).map(record => ({ table: db.wishlist, record })),
+  ];
+  for (const { table, record } of entries) {
+    const bytes = photoBytesOf(record);
+    const batch = batches.at(-1);
+    if (!batch || batch.table !== table || batchPhotoBytes + bytes > batchBytes) {
+      batches.push({ table, records: [record] });
+      batchPhotoBytes = bytes;
+    } else {
+      batch.records.push(record);
+      batchPhotoBytes += bytes;
     }
-  });
+  }
+
+  if (batches.length === 0) {
+    await db.transaction('rw', tables, emptyTables);
+    return;
+  }
+
+  let stored = 0;
+  for (const [index, batch] of batches.entries()) {
+    try {
+      const copies = [];
+      for (const record of batch.records) {
+        copies.push(Array.isArray(record.photos)
+          ? { ...record, photos: await Promise.all(record.photos.map(ownCopy)) }
+          : record);
+      }
+      await db.transaction('rw', tables, async () => {
+        if (index === 0) await emptyTables();
+        await batch.table.bulkAdd(copies);
+      });
+      stored += copies.length;
+    } catch (error) {
+      if (index === 0) throw error;
+      throw Object.assign(new Error('The backup was restored only in part'), { partial: true, cause: error });
+    }
+    onProgress({ done: stored, total: entries.length });
+  }
 }
