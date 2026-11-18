@@ -668,6 +668,100 @@ photoTest('on an iPhone, makes a file the share sheet cannot take again in small
   expect(await storedPhotoSizes(page)).toEqual([100_000, 100_000, 100_000, 100_000]);
 });
 
+// Dialogs of different heights can leave the pointer on the edge of the next Save button,
+// where its hover lift moves it away and back without end; a tap has no such pointer.
+async function clickSave(page) {
+  await page.mouse.move(0, 0);
+  await page.getByRole('button', { name: 'Save' }).click();
+}
+
+photoTest('on an iPhone, continues a backup that stopped part way after the app is opened again', async ({ page }, testInfo) => {
+  // An iPhone whose share sheet stops taking files (as when the phone is full) while
+  // `shareFails` is set, and keeps every file otherwise.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    });
+    window.sharedFiles = [];
+    navigator.canShare = () => true;
+    navigator.share = async ({ files: [file] }) => {
+      if (sessionStorage.getItem('shareFails')) {
+        throw new DOMException('Abort due to error while reading files.', 'AbortError');
+      }
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+      window.sharedFiles.push({ name: file.name, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) });
+    };
+  });
+  await useEnglish(page);
+  // One item per file; a file that fails is not made smaller again.
+  await page.evaluate(() => {
+    sessionStorage.setItem('acgBackupPartBytes', '150000');
+    sessionStorage.setItem('acgBackupMinPartBytes', '100000');
+  });
+  await seedLargePhotos(page, { count: 4, bytes: 100_000 });
+  await page.reload();
+  await expect(page.locator('.item-card')).toHaveCount(4);
+
+  // File 1 is saved; then the phone is full.
+  await page.getByRole('button', { name: 'Export Backup' }).click();
+  await expect(page.getByRole('dialog', { name: 'Backup file 1 is ready' })).toContainText('The whole backup will take about', { timeout: 30_000 });
+  await clickSave(page);
+  await expect(page.getByRole('dialog', { name: 'Backup file 2 is ready' })).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => sessionStorage.setItem('shareFails', 'yes'));
+  await clickSave(page);
+  const stopped = page.getByRole('dialog', { name: 'Backup could not be shared' });
+  await expect(stopped).toContainText('The 1 file(s) saved so far are kept.');
+  await expect(stopped).toContainText('go on from file 2');
+  const shared = await page.evaluate(() => window.sharedFiles);
+  expect(shared).toHaveLength(1);
+
+  // Space freed, the app opened again: the backup goes on from file 2.
+  await page.evaluate(() => sessionStorage.removeItem('shareFails'));
+  await page.reload();
+  await page.getByRole('button', { name: 'Export Backup' }).click();
+  await expect(page.getByRole('dialog', { name: 'Continue the last backup?' })).toContainText('1 file(s) of the last backup are saved');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Backup file 2 is ready' })).toContainText('The rest of the backup will take about', { timeout: 30_000 });
+  for (const number of [2, 3, 4]) {
+    await expect(page.getByRole('dialog', { name: `Backup file ${number} is ready` })).toBeVisible({ timeout: 30_000 });
+    await clickSave(page);
+  }
+  await expect(page.getByRole('dialog', { name: 'Backup saved in 4 files' })).toContainText('choose all 4 files at once');
+  await page.getByRole('button', { name: 'Close' }).click();
+  shared.push(...await page.evaluate(() => window.sharedFiles));
+
+  expect(shared.map(file => file.name)).toEqual([1, 2, 3, 4].map(number => (
+    expect.stringMatching(new RegExp(`^acg-backup-\\d{4}-\\d{2}-\\d{2}-part0${number}\\.zip$`))
+  )));
+  const paths = [];
+  const backups = new Set();
+  for (const file of shared) {
+    const path = testInfo.outputPath(file.name);
+    await writeFile(path, Buffer.from(file.base64, 'base64'));
+    const { backup } = await readBackupArchive(path);
+    expect(backup.items).toHaveLength(1);
+    backups.add(backup.part.backup);
+    paths.push(path);
+  }
+  expect(backups.size).toBe(1);
+
+  // The files of both sittings restore as one backup.
+  await clearCollection(page);
+  await expect(page.getByText('No items found')).toBeVisible();
+  await page.getByRole('button', { name: 'Import Backup', exact: true }).click();
+  await page.getByLabel('Import backup file').setInputFiles(paths);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Completed' })).toContainText('imported successfully', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.item-card')).toHaveCount(4);
+  expect(await storedPhotoSizes(page)).toEqual([100_000, 100_000, 100_000, 100_000]);
+});
+
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {
   await useEnglish(page);
 
