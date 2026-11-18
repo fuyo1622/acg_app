@@ -142,6 +142,7 @@ describe('Home smoke flows', () => {
     vi.clearAllMocks();
     delete navigator.storage;
     localStorage.removeItem('storagePanelHidden');
+    localStorage.removeItem('acgBackupProgress');
   });
 
   it('hides the storage panel, remembers the choice, and shows it again from the header', async () => {
@@ -680,8 +681,9 @@ describe('Home smoke flows', () => {
         expect(await screen.findByRole('dialog', { name: 'Backup file 2 is ready' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Stop backup' }));
 
-        expect(await screen.findByRole('dialog', { name: 'Backup not finished' }))
-          .toHaveTextContent('a restore needs every file');
+        const stopped = await screen.findByRole('dialog', { name: 'Backup not finished' });
+        expect(stopped).toHaveTextContent('1 file(s) saved');
+        expect(stopped).toHaveTextContent('go on from file 2 later, tap Export Backup and choose Continue');
         expect(navigator.share).toHaveBeenCalledTimes(2);
       });
     });
@@ -754,10 +756,39 @@ describe('Home smoke flows', () => {
 
         const stopped = await screen.findByRole('dialog', { name: 'Backup could not be shared' });
         expect(stopped).toHaveTextContent('AbortError: Abort due to error while reading files.');
-        expect(stopped).toHaveTextContent('a few GB free');
+        expect(stopped).toHaveTextContent('low on free space: the backup needs about');
         expect(navigator.share).toHaveBeenCalledTimes(2);
         expect(screen.queryByRole('dialog', { name: /Backup file/ })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Export Backup' })).toBeEnabled();
+      });
+
+      it('keeps the files saved so far when the next cannot be shared, and continues from it later', async () => {
+        // Two files of three items; the second can be made smaller.
+        dbMocks.items.toArray.mockResolvedValue([1, 2, 3, 4, 5, 6].map(id => collectionItem(id, 100)));
+        navigator.share.mockResolvedValueOnce(undefined).mockRejectedValue(readError());
+        const { unmount } = renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+        await screen.findByRole('dialog', { name: 'Backup file 2 is ready' });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await screen.findByText(/too large for the share sheet/);
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        const stopped = await screen.findByRole('dialog', { name: 'Backup could not be shared' });
+        expect(stopped).toHaveTextContent('The 1 file(s) saved so far are kept.');
+        expect(stopped).toHaveTextContent('the rest of the backup needs about');
+        expect(stopped).toHaveTextContent('choose Continue to go on from file 2');
+
+        // As if the app were closed and opened again once there is space.
+        unmount();
+        navigator.share.mockReset().mockResolvedValue(undefined);
+        renderHome();
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        expect(await screen.findByRole('dialog', { name: 'Continue the last backup?' })).toHaveTextContent('from file 2');
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        expect(await screen.findByRole('dialog', { name: 'Backup file 2 is ready' }))
+          .toHaveTextContent('The rest of the backup will take about');
       });
 
       it('makes a safety backup smaller too, then restores once all of it is saved', async () => {
@@ -780,6 +811,101 @@ describe('Home smoke flows', () => {
         });
         expect(navigator.share).toHaveBeenCalledTimes(5);
       });
+    });
+
+    describe('stopped part way', () => {
+      // One item per file: four files.
+      beforeEach(() => {
+        sessionStorage.setItem('acgBackupPartBytes', '150');
+        dbMocks.items.toArray.mockResolvedValue([1, 2, 3, 4].map(id => collectionItem(id, 100)));
+      });
+
+      afterEach(() => {
+        sessionStorage.removeItem('acgBackupPartBytes');
+      });
+
+      const sharedPayloads = () => Promise.all(navigator.share.mock.calls.map(async ([{ files: [file] }]) => (
+        JSON.parse(await (await readZip(file)).text('backup.json'))
+      )));
+
+      // Saves the first file, stops at the second, and closes the app.
+      async function saveOneFileAndStop() {
+        const { unmount } = renderHome();
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        const first = await screen.findByRole('dialog', { name: 'Backup file 1 is ready' });
+        expect(first).toHaveTextContent('The whole backup will take about');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await screen.findByRole('dialog', { name: 'Backup file 2 is ready' });
+        fireEvent.click(screen.getByRole('button', { name: 'Stop backup' }));
+        await screen.findByRole('dialog', { name: 'Backup not finished' });
+        unmount();
+      }
+
+      it('continues from the next file after the app is opened again, as one backup', async () => {
+        await saveOneFileAndStop();
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        const offer = await screen.findByRole('dialog', { name: 'Continue the last backup?' });
+        expect(offer).toHaveTextContent(/1 file\(s\) of the last backup are saved \(acg-backup-\d{4}-\d{2}-\d{2}-part01\.zip to/);
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        for (const number of [2, 3, 4]) {
+          await screen.findByRole('dialog', { name: `Backup file ${number} is ready` });
+          fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        }
+
+        const saved = await screen.findByRole('dialog', { name: 'Backup saved in 4 files' });
+        expect(saved).toHaveTextContent(/acg-backup-\d{4}-\d{2}-\d{2}-part01\.zip to acg-backup-\d{4}-\d{2}-\d{2}-part04\.zip/);
+        const parts = await sharedPayloads();
+        expect(parts.map(part => part.items.map(record => record.id))).toEqual([[1], [2], [3], [4]]);
+        expect(parts.map(part => part.part.number)).toEqual([1, 2, 3, 4]);
+        expect(new Set(parts.map(part => part.part.backup)).size).toBe(1);
+        expect(parts[3].part).toEqual(expect.objectContaining({ last: true, parts: 4, items: 4 }));
+        // Finished: the next backup is a new one.
+        expect(localStorage.getItem('acgBackupProgress')).toBeNull();
+      });
+
+      it('starts a new backup when asked to start over', async () => {
+        await saveOneFileAndStop();
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Start over' }));
+        await screen.findByRole('dialog', { name: 'Backup file 1 is ready' });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await screen.findByRole('dialog', { name: 'Backup file 2 is ready' });
+        const [first, second] = await sharedPayloads();
+        expect(first.part.number).toBe(1);
+        expect(second.part.number).toBe(1);
+        expect(second.part.backup).not.toBe(first.part.backup);
+      });
+
+      it('does not continue a backup whose records changed since', async () => {
+        await saveOneFileAndStop();
+        dbMocks.items.toArray.mockResolvedValue([1, 2, 3, 4, 5].map(id => collectionItem(id, 100)));
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+        expect(await screen.findByRole('dialog', { name: 'The last backup cannot be continued' }))
+          .toHaveTextContent('Delete them and export a new backup.');
+        expect(localStorage.getItem('acgBackupProgress')).toBeNull();
+        expect(navigator.share).toHaveBeenCalledTimes(1);
+      });
+
+      it('leaves the stopped backup alone when the question is cancelled', async () => {
+        await saveOneFileAndStop();
+        renderHome();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(JSON.parse(localStorage.getItem('acgBackupProgress'))).toEqual(expect.objectContaining({ saved: 1 }));
+      });
+
     });
   });
 

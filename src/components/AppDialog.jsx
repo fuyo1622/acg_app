@@ -1,13 +1,16 @@
 import { useEffect, useId, useRef } from 'react';
 
+// `secondaryLabel` and `onSecondary` add a third choice between cancelling and confirming.
 export default function AppDialog({
   open,
   title,
   message,
   confirmLabel,
   cancelLabel,
+  secondaryLabel,
   onConfirm,
   onCancel,
+  onSecondary,
   destructive = false,
 }) {
   const titleId = useId();
@@ -73,6 +76,11 @@ export default function AppDialog({
           {cancelLabel && (
             <button ref={cancelButtonRef} type="button" className="btn btn-secondary" onClick={onCancel}>
               {cancelLabel}
+            </button>
+          )}
+          {secondaryLabel && (
+            <button type="button" className="btn btn-secondary" onClick={onSecondary}>
+              {secondaryLabel}
             </button>
           )}
           <button

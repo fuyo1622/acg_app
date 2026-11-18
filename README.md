@@ -28,7 +28,8 @@ Live app: [https://acg-app-steel.vercel.app/](https://acg-app-steel.vercel.app/)
   and restore it later. A large backup comes in files of about 200 MB (100 MB on iPhone
   and iPad, and smaller still when the share sheet cannot take one), with photos over
   500 KB made smaller, so a phone can save it; restore it by choosing all of its files at
-  once. Backups from earlier versions (JSON) still import.
+  once. A backup that stops part way, for example on a full phone, can be continued from
+  its next file later. Backups from earlier versions (JSON) still import.
 - Install from Android Chrome or iOS Safari and reopen the cached app shell offline.
 - Switch between Traditional Chinese and English.
 

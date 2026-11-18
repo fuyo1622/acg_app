@@ -3,6 +3,7 @@ import {
   BACKUP_DATA_FILE,
   BackupPartsError,
   createBackupParts,
+  readBackupFile,
   readBackupFiles,
   rehydrateBackupFiles,
   validateBackupFiles,
@@ -189,6 +190,61 @@ describe('backups in parts (format 6)', () => {
       expect(saved).toEqual([expect.objectContaining({ number: 1, last: true })]);
       const [{ payload }] = await readBackupFiles(asFiles(saved));
       expect(payload.part).toEqual(expect.objectContaining({ parts: 1, items: 0, wishlist: 0 }));
+    });
+  });
+
+  describe('a backup continued later', () => {
+    // Items 1 to 3 and wishlist entries 4 and 5, one record per part.
+    const sections = () => ({
+      items: [item(1, photoOfSize(100)), item(2, photoOfSize(100)), item(3, photoOfSize(100))],
+      wishlist: [entry(4, photoOfSize(100)), entry(5, photoOfSize(100))],
+    });
+
+    it('says how far each part got, counting items first, and how many photos it holds', async () => {
+      const parts = await collectParts(sections(), { partBytes: 150 });
+
+      expect(parts.map(part => part.position)).toEqual([1, 2, 3, 4, 5]);
+      expect(parts.map(part => part.photos)).toEqual([1, 1, 1, 1, 1]);
+      expect(new Set(parts.map(part => part.backup)).size).toBe(1);
+    });
+
+    it('goes on from the part after the last one saved, as the same backup', async () => {
+      const first = createBackupParts(sections(), { partBytes: 150 });
+      const saved = [(await first.next()).value, (await first.next()).value];
+      await first.return();
+
+      const preparePhoto = vi.fn(async photo => photo);
+      const [last] = saved.slice(-1);
+      const rest = await collectParts(sections(), {
+        partBytes: 150,
+        preparePhoto,
+        resume: { id: last.backup, number: last.number + 1, position: last.position },
+      });
+
+      expect(rest.map(part => part.number)).toEqual([3, 4, 5]);
+      expect(rest.every(part => part.backup === last.backup)).toBe(true);
+      // The photos of the records already saved are not prepared again.
+      expect(preparePhoto).toHaveBeenCalledTimes(3);
+      const opened = await readBackupFiles(asFiles([...saved, ...rest]));
+      expect(validateBackupFiles(opened, BACKUP_VERSION)).toBe(true);
+      expect(opened.at(-1).payload.part).toEqual(expect.objectContaining({ last: true, parts: 5, items: 3, wishlist: 2 }));
+      const restored = await rehydrateBackupFiles(opened);
+      expect(restored.items.map(record => record.id)).toEqual([1, 2, 3]);
+      expect(restored.wishlist.map(record => record.id)).toEqual([4, 5]);
+    });
+
+    it('goes on from within the wishlist too', async () => {
+      const all = await collectParts(sections(), { partBytes: 150 });
+      const rest = await collectParts(sections(), {
+        partBytes: 150,
+        resume: { id: all[3].backup, number: 5, position: all[3].position },
+      });
+
+      expect(rest).toHaveLength(1);
+      const { payload } = await readBackupFile(asFiles(rest)[0]);
+      expect(payload.items).toEqual([]);
+      expect(payload.wishlist.map(record => record.id)).toEqual([5]);
+      expect(payload.part).toEqual(expect.objectContaining({ number: 5, last: true, parts: 5 }));
     });
   });
 

@@ -128,13 +128,65 @@ function countPhotos({ items, wishlist }) {
 }
 
 // A backup in one file keeps the name it always had; the files of a larger one are numbered.
-function backupFileName(prefix, part) {
-  const date = new Date().toISOString().slice(0, 10);
+// All files of one backup carry the day it was started, also when it is continued later.
+function backupFileName({ prefix, date }, part) {
   const number = part.number === 1 && part.last ? '' : `-part${String(part.number).padStart(2, '0')}`;
   return `${prefix}-${date}${number}.zip`;
 }
 
 const isSingleFile = part => part.number === 1 && part.last;
+
+// A backup in several files remembers how far it got, so that it can be continued after the
+// app was closed, or after space was freed on the phone, instead of starting over:
+// { version, id, date, saved, position, photos, bytes, fingerprint }, `saved` files so far.
+const BACKUP_PROGRESS_KEY = 'acgBackupProgress';
+
+function readBackupProgress() {
+  try {
+    const progress = JSON.parse(localStorage.getItem(BACKUP_PROGRESS_KEY));
+    return progress?.version === 1 && typeof progress.id === 'string' && progress.saved > 0 ? progress : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBackupProgress(progress) {
+  try {
+    localStorage.setItem(BACKUP_PROGRESS_KEY, JSON.stringify({ version: 1, ...progress }));
+  } catch {
+    // Without storage the backup cannot be continued later, but it still works now.
+  }
+}
+
+function clearBackupProgress() {
+  try {
+    localStorage.removeItem(BACKUP_PROGRESS_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+// A stopped backup can only be continued while the records are the ones it started with:
+// its files are cut by position, and the last one counts the records.
+function backupFingerprint({ items, wishlist }) {
+  let hash = 0x811c9dc5;
+  for (const record of [...items, ...wishlist]) {
+    const updated = record.updated_at ? new Date(record.updated_at).getTime() : 0;
+    for (const character of `${record.id}:${updated};`) {
+      hash = Math.imul(hash ^ character.charCodeAt(0), 0x01000193);
+    }
+  }
+  return `${items.length}:${wishlist.length}:${(hash >>> 0).toString(16)}`;
+}
+
+// The space the backup takes, from the photos saved and about to be: the whole of it, or
+// what is left of it. Null without a photo to go by.
+function estimateBackupBytes(job, part) {
+  const photos = job.photosSaved + part.photos;
+  if (photos === 0 || job.photos === 0) return null;
+  const total = ((job.bytesSaved + part.file.size) / photos) * job.photos;
+  return { total, remaining: Math.max(total - job.bytesSaved, part.file.size) };
+}
 
 const tabClassName = ({ isActive }) => `list-tab${isActive ? ' is-active' : ''}`;
 
@@ -167,6 +219,8 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   const [readyPart, setReadyPart] = useState(null);
   const [progress, setProgress] = useState(null);
   const [unsavedSafetyImport, setUnsavedSafetyImport] = useState(null);
+  // The progress of a backup that stopped part way, offered to be continued.
+  const [resumeOffer, setResumeOffer] = useState(null);
   const [storageStatus, setStorageStatus] = useState(null);
   const [storageHidden, setStorageHidden] = useState(readStoragePanelHidden);
   const fileInputRef = useRef(null);
@@ -230,12 +284,25 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   useEffect(() => () => endBackupJob(), []);
 
   // Starts saving `sections` as a backup. Its files are made one at a time, when asked for,
-  // so only one file's photos are held at once.
-  const startBackupJob = (sections, { prefix, purpose, importData = null }) => {
+  // so only one file's photos are held at once. `resume` is the progress of a backup that
+  // stopped, to continue it from its next file.
+  const startBackupJob = (sections, { prefix, purpose, importData = null, resume = null }) => {
     endBackupJob();
     const partBytes = backupPartBytes();
-    const job = { prefix, purpose, importData, partBytes, saved: 0, names: [], photos: countPhotos(sections) };
-    let photosDone = 0;
+    const job = {
+      prefix,
+      purpose,
+      importData,
+      partBytes,
+      date: resume?.date ?? new Date().toISOString().slice(0, 10),
+      saved: resume?.saved ?? 0,
+      names: [],
+      photos: countPhotos(sections),
+      photosSaved: resume?.photos ?? 0,
+      bytesSaved: resume?.bytes ?? 0,
+      fingerprint: purpose === 'backup' ? backupFingerprint(sections) : null,
+    };
+    let photosDone = job.photosSaved;
     job.parts = createBackupParts(sections, {
       partBytes,
       preparePhoto: shrinkPhotoForBackup,
@@ -243,6 +310,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         photosDone += 1;
         if (backupJobRef.current === job) setProgress(current => ({ ...current, done: photosDone }));
       },
+      resume: resume && { id: resume.id, number: resume.saved + 1, position: resume.position },
     });
     backupJobRef.current = job;
     return job;
@@ -251,23 +319,49 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
   // The job's next file, or null when the job was stopped in the meantime. With
   // `{ partBytes }`, the file just offered is made again as files of that size instead.
   const prepareNextPart = async (job, request) => {
-    setProgress(current => ({ part: job.saved + 1, done: current?.done ?? 0, total: job.photos }));
+    setProgress(current => ({ part: job.saved + 1, done: current?.done ?? job.photosSaved, total: job.photos }));
     keepScreenOn();
     setIsProcessing(true);
     try {
       const { value, done } = await job.parts.next(request);
       if (done || backupJobRef.current !== job) return null;
-      const file = new File([value.blob], backupFileName(job.prefix, value), { type: 'application/zip' });
-      return { number: value.number, last: value.last, purpose: job.purpose, file };
+      const file = new File([value.blob], backupFileName(job, value), { type: 'application/zip' });
+      return {
+        number: value.number,
+        last: value.last,
+        purpose: job.purpose,
+        file,
+        backup: value.backup,
+        photos: value.photos,
+        position: value.position,
+      };
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // After a file of the job is saved: prepare the next one, or finish the job.
+  // After a file of the job is saved: remember how far a backup got, then prepare the next
+  // file, or finish the job.
   const continueBackupJob = async (job, part, result) => {
     job.saved += 1;
     job.names.push(part.file.name);
+    job.photosSaved += part.photos;
+    job.bytesSaved += part.file.size;
+    if (job.purpose === 'backup') {
+      if (part.last) {
+        clearBackupProgress();
+      } else {
+        saveBackupProgress({
+          id: part.backup,
+          date: job.date,
+          saved: job.saved,
+          position: part.position,
+          photos: job.photosSaved,
+          bytes: job.bytesSaved,
+          fingerprint: job.fingerprint,
+        });
+      }
+    }
     if (!part.last) {
       const next = await prepareNextPart(job);
       if (next) setReadyPart(next);
@@ -286,15 +380,28 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     } else {
       setNotice({
         title: t('backupPartsSavedTitle', { count: job.saved }),
-        message: t('backupPartsSavedMessage', { count: job.saved, first: job.names[0], last: job.names.at(-1) }),
+        message: t('backupPartsSavedMessage', {
+          count: job.saved,
+          first: backupFileName(job, { number: 1, last: false }),
+          last: part.file.name,
+        }),
       });
     }
   };
 
-  const handleExport = async () => {
+  // Saves a new backup, or continues the stopped one whose progress is `resume`.
+  const exportBackup = async (resume = null) => {
     setIsProcessing(true);
     try {
-      const job = startBackupJob(await readBackupSections(), { prefix: 'acg-backup', purpose: 'backup' });
+      const sections = await readBackupSections();
+      const records = sections.items.length + sections.wishlist.length;
+      if (resume && (backupFingerprint(sections) !== resume.fingerprint || resume.position >= records)) {
+        clearBackupProgress();
+        setNotice({ title: t('backupResumeChangedTitle'), message: t('backupResumeChangedMessage') });
+        return;
+      }
+      if (!resume) clearBackupProgress();
+      const job = startBackupJob(sections, { prefix: 'acg-backup', purpose: 'backup', resume });
       const part = await prepareNextPart(job);
       if (!part) return;
       // A backup in one file downloads at once where there is no share sheet. Otherwise each
@@ -304,7 +411,9 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         endBackupJob();
         return;
       }
-      setReadyPart(part);
+      // Before the first file, say how much space the files will need.
+      const estimate = isSingleFile(part) ? null : estimateBackupBytes(job, part);
+      setReadyPart({ ...part, estimate: estimate && { bytes: resume ? estimate.remaining : estimate.total, rest: Boolean(resume) } });
     } catch (error) {
       console.error(error);
       endBackupJob();
@@ -314,16 +423,42 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     }
   };
 
+  const handleExport = () => {
+    const progress = readBackupProgress();
+    if (progress) setResumeOffer(progress);
+    else exportBackup();
+  };
+
+  const continueStoppedBackup = () => {
+    const progress = resumeOffer;
+    setResumeOffer(null);
+    exportBackup(progress);
+  };
+
+  const startBackupOver = () => {
+    setResumeOffer(null);
+    clearBackupProgress();
+    exportBackup();
+  };
+
   // The share sheet could not take the file: its records are made again as files of half
-  // the size, and the files after them keep that size. Below the smallest size the backup
-  // stops and says why, rather than offer a file that cannot be saved.
+  // the size, and the files after them keep that size. Below the smallest size the cause is
+  // not the size, so the backup stops, says what to do, and can be continued later.
   const offerSmallerPart = async (job, part, error) => {
     const partBytes = Math.floor(job.partBytes / 2);
     if (partBytes < minimumPartBytes()) {
       endBackupJob();
+      const estimate = estimateBackupBytes(job, part);
+      const values = {
+        reason: `${error?.name ?? 'Error'}: ${error?.message ?? ''}`,
+        size: formatBytes(estimate?.remaining ?? part.file.size, storageLocale),
+        count: job.saved,
+        next: job.saved + 1,
+      };
+      const canContinue = job.purpose === 'backup' && job.saved > 0;
       setNotice({
         title: t('backupShareFailedTitle'),
-        message: t('backupShareFailedMessage', { reason: `${error?.name ?? 'Error'}: ${error?.message ?? ''}` }),
+        message: t(canContinue ? 'backupShareFailedResumeMessage' : 'backupShareFailedMessage', values),
       });
       return;
     }
@@ -368,7 +503,8 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     if (job?.purpose === 'safety') {
       setUnsavedSafetyImport(job.importData);
     } else if (job?.saved > 0) {
-      setNotice({ title: t('backupStoppedTitle'), message: t('backupStoppedMessage') });
+      // Its progress is kept, so the next Export Backup can continue it.
+      setNotice({ title: t('backupStoppedTitle'), message: t('backupStoppedMessage', { count: job.saved, next: job.saved + 1 }) });
     }
   };
 
@@ -504,6 +640,7 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
       number: readyPart.number,
       name: readyPart.file.name,
       size: formatBytes(readyPart.file.size, storageLocale),
+      estimate: readyPart.estimate ? formatBytes(readyPart.estimate.bytes, storageLocale) : '',
     };
     // Chinese sentences follow each other without a space.
     const sentences = (...keys) => keys.map(key => t(key, values)).join(lang === 'en' ? ' ' : '');
@@ -511,9 +648,15 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
     if (isSingleFile(readyPart)) {
       return { title: t('exportReadyTitle'), message: sentences(...smaller, 'exportReadyMessage') };
     }
+    const estimate = readyPart.estimate ? [readyPart.estimate.rest ? 'backupEstimateRest' : 'backupEstimateTotal'] : [];
     return {
       title: t(readyPart.purpose === 'safety' ? 'safetyPartReadyTitle' : 'exportPartReadyTitle', values),
-      message: sentences(...smaller, 'exportPartReadyMessage', readyPart.last ? 'exportPartReadyLast' : 'exportPartReadyNext'),
+      message: sentences(
+        ...smaller,
+        'exportPartReadyMessage',
+        ...estimate,
+        readyPart.last ? 'exportPartReadyLast' : 'exportPartReadyNext',
+      ),
     };
   })();
 
@@ -659,6 +802,22 @@ export default function AppHeader({ title, storageRefreshKey, children }) {
         onConfirm={replaceWithoutSafetyBackup}
         onCancel={() => setUnsavedSafetyImport(null)}
         destructive
+      />
+      <AppDialog
+        open={Boolean(resumeOffer)}
+        title={t('backupResumeTitle')}
+        message={resumeOffer ? t('backupResumeMessage', {
+          count: resumeOffer.saved,
+          first: backupFileName({ prefix: 'acg-backup', date: resumeOffer.date }, { number: 1, last: false }),
+          last: backupFileName({ prefix: 'acg-backup', date: resumeOffer.date }, { number: resumeOffer.saved, last: false }),
+          next: resumeOffer.saved + 1,
+        }) : ''}
+        confirmLabel={t('continue')}
+        secondaryLabel={t('backupStartOver')}
+        cancelLabel={t('cancel')}
+        onConfirm={continueStoppedBackup}
+        onSecondary={startBackupOver}
+        onCancel={() => setResumeOffer(null)}
       />
       <AppDialog
         open={Boolean(readyPart)}

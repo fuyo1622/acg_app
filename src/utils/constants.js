@@ -20,11 +20,13 @@ export const PARTED_BACKUP_VERSION = 6;
 // On an iPhone or iPad a part goes to the share sheet, and Safari first reads the whole file
 // into memory, twice: a 200 MB part was too much for an iPhone, so there parts are smaller,
 // and a part the share sheet still cannot take is made again at half the size, down to
-// BACKUP_MIN_PART_BYTES. Photos larger than BACKUP_SHRINK_PHOTO_BYTES are shrunk to the size
-// the app stores new photos at, which keeps the parts few.
+// BACKUP_MIN_PART_BYTES. Below that the cause is not the size (a full phone, or an app that
+// needs restarting), so the backup stops there and can be continued later. Photos larger
+// than BACKUP_SHRINK_PHOTO_BYTES are shrunk to the size the app stores new photos at, which
+// keeps the parts few.
 export const BACKUP_PART_BYTES = 200 * 1024 * 1024;
 export const BACKUP_SHARE_PART_BYTES = 100 * 1024 * 1024;
-export const BACKUP_MIN_PART_BYTES = 10 * 1024 * 1024;
+export const BACKUP_MIN_PART_BYTES = 25 * 1024 * 1024;
 export const BACKUP_SHRINK_PHOTO_BYTES = 500 * 1024;
 
 export const BACKUP_LIMITS = Object.freeze({
