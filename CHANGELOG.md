@@ -6,6 +6,20 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-18
+
+### Fixed
+
+- On an iPhone, a backup file could come out many times larger than it should, a file of
+  "100 MB" at 2.5 GB, so the share sheet could not take it. Safari stored every photo
+  restored from a backup archive (since 0.6.0) as a copy of the whole archive file, while
+  it still said it was the photo: such photos could not be shown at full size, and each
+  made a new backup grow by the size of the old one. Before a backup, the app now finds
+  these photos, takes each one out of its copy, and stores it as itself, which also frees
+  the space the copies took. A photo that cannot be recovered is left out of the backup,
+  and the backup says so. Restoring a backup on an iPhone still stores photos this way
+  until the next release; the next backup repairs them.
+
 ## [0.6.4] - 2026-11-18
 
 ### Fixed
