@@ -236,6 +236,13 @@ input::placeholder, textarea::placeholder {
   margin-bottom: 0.75rem;
 }
 
+/* One dialog can follow another of a different height under a pointer that has not moved,
+   such as the files of a backup. A button that lifts on hover can then leave the pointer,
+   drop back under it and lift again without end, so buttons in a dialog stay put. */
+.app-dialog .btn:hover {
+  transform: none;
+}
+
 .dialog-message {
   color: var(--text-muted);
   line-height: 1.6;

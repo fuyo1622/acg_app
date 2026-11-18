@@ -668,13 +668,6 @@ photoTest('on an iPhone, makes a file the share sheet cannot take again in small
   expect(await storedPhotoSizes(page)).toEqual([100_000, 100_000, 100_000, 100_000]);
 });
 
-// Dialogs of different heights can leave the pointer on the edge of the next Save button,
-// where its hover lift moves it away and back without end; a tap has no such pointer.
-async function clickSave(page) {
-  await page.mouse.move(0, 0);
-  await page.getByRole('button', { name: 'Save' }).click();
-}
-
 photoTest('on an iPhone, continues a backup that stopped part way after the app is opened again', async ({ page }, testInfo) => {
   // An iPhone whose share sheet stops taking files (as when the phone is full) while
   // `shareFails` is set, and keeps every file otherwise.
@@ -710,10 +703,10 @@ photoTest('on an iPhone, continues a backup that stopped part way after the app 
   // File 1 is saved; then the phone is full.
   await page.getByRole('button', { name: 'Export Backup' }).click();
   await expect(page.getByRole('dialog', { name: 'Backup file 1 is ready' })).toContainText('The whole backup will take about', { timeout: 30_000 });
-  await clickSave(page);
+  await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog', { name: 'Backup file 2 is ready' })).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => sessionStorage.setItem('shareFails', 'yes'));
-  await clickSave(page);
+  await page.getByRole('button', { name: 'Save' }).click();
   const stopped = page.getByRole('dialog', { name: 'Backup could not be shared' });
   await expect(stopped).toContainText('The 1 file(s) saved so far are kept.');
   await expect(stopped).toContainText('go on from file 2');
@@ -729,7 +722,7 @@ photoTest('on an iPhone, continues a backup that stopped part way after the app 
   await expect(page.getByRole('dialog', { name: 'Backup file 2 is ready' })).toContainText('The rest of the backup will take about', { timeout: 30_000 });
   for (const number of [2, 3, 4]) {
     await expect(page.getByRole('dialog', { name: `Backup file ${number} is ready` })).toBeVisible({ timeout: 30_000 });
-    await clickSave(page);
+    await page.getByRole('button', { name: 'Save' }).click();
   }
   await expect(page.getByRole('dialog', { name: 'Backup saved in 4 files' })).toContainText('choose all 4 files at once');
   await page.getByRole('button', { name: 'Close' }).click();
