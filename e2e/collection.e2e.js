@@ -938,12 +938,11 @@ async function restoreAsBefore066(page, backupPath) {
       request.onerror = () => reject(request.error);
     });
   });
-  await page.reload();
-  await expect(page.locator('.item-card')).toHaveCount(12);
 }
 
-photoTest('restores photos as themselves, in batches, so they stay whole after the app is reopened', async ({ page }, testInfo) => {
+photoTest('restores photos as themselves, in batches, so they stay whole after the app is reopened', async ({ page: firstPage, reopenApp }, testInfo) => {
   photoTest.slow(true, 'Backs up, restores and backs up again a dozen real photos');
+  let page = firstPage;
   await useKeepingShareSheet(page);
   await useEnglish(page);
   await seedRealPhotos(page);
@@ -954,7 +953,7 @@ photoTest('restores photos as themselves, in batches, so they stay whole after t
   await clearCollection(page);
   await page.evaluate(() => sessionStorage.setItem('acgRestoreBatchBytes', '300000'));
   await importBackupFiles(page, first.paths);
-  await page.reload();
+  page = await reopenApp(page, useKeepingShareSheet);
   await expect(page.locator('.item-card')).toHaveCount(12);
   expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
 
@@ -965,8 +964,9 @@ photoTest('restores photos as themselves, in batches, so they stay whole after t
   expect(second.files.reduce((total, file) => total + file.size, 0)).toBeLessThan(photoBytes + 100_000);
 });
 
-photoTest('repairs photos that earlier restores stored as copies of the backup, and backs up the photos themselves', async ({ page, browserName }, testInfo) => {
+photoTest('repairs photos that earlier restores stored as copies of the backup, and backs up the photos themselves', async ({ page: firstPage, browserName, reopenApp }, testInfo) => {
   photoTest.slow(true, 'Backs up, restores and backs up again a dozen real photos');
+  let page = firstPage;
   await useKeepingShareSheet(page);
   await useEnglish(page);
   await seedRealPhotos(page);
@@ -974,19 +974,19 @@ photoTest('repairs photos that earlier restores stored as copies of the backup, 
   expect(first.files).toHaveLength(1);
   const photoBytes = (await storedPhotoSizes(page)).reduce((total, size) => total + size, 0);
 
-  // Restored the old way. WebKit on Windows then stores the photos as copies of the backup
-  // file, as Safari on an iPhone did. WebKit on Linux (GitHub's runner) did not with this
-  // restore (2026-11-18), though it did with the app's own restore in 0.6.5.
-  const linuxWebKit = browserName === 'webkit' && process.platform === 'linux';
+  // Restored the old way, and the app closed and opened again: WebKit then has the photos
+  // stored as copies of the backup file, as Safari on an iPhone did.
   await restoreAsBefore066(page, first.paths[0]);
+  page = await reopenApp(page, useKeepingShareSheet);
+  await expect(page.locator('.item-card')).toHaveCount(12);
   const restored = await storedPhotoState(page);
   expect(restored.count).toBe(12);
-  if (browserName === 'webkit' && !linuxWebKit) expect(restored.detached).toBeGreaterThan(0);
+  if (browserName === 'webkit') expect(restored).toEqual({ count: 12, detached: 12, decoded: 0 });
 
   // A new backup in small files: damaged photos are repaired first, and no file grows by
   // the size of the old backup.
-  await page.evaluate(() => sessionStorage.setItem('acgBackupPartBytes', '400000'));
   const backUpInSmallFiles = async (prefix) => {
+    await page.evaluate(() => sessionStorage.setItem('acgBackupPartBytes', '400000'));
     const backup = await saveEverything(page, testInfo, prefix);
     expect(backup.files.length).toBeGreaterThan(1);
     for (const file of backup.files) expect(file.size).toBeLessThan(400_000 + 250_000);
@@ -995,23 +995,21 @@ photoTest('repairs photos that earlier restores stored as copies of the backup, 
   };
   const second = await backUpInSmallFiles('second');
   if (restored.detached > 0) {
-    expect(second.messages[0]).toContain('photo(s) restored from an earlier backup were damaged on this device and have been repaired.');
+    expect(second.messages[0]).toContain('12 photo(s) restored from an earlier backup were damaged on this device and have been repaired.');
   }
 
-  // After a reload the repaired photos are stored as themselves and show. WebKit on Linux
-  // did not keep repaired photos in 0.6.5 (2026-11-18); there each backup repairs them
-  // again, which the sizes of the next backup check.
-  await page.reload();
+  // Once the app is opened again, the repaired photos are stored as themselves and show,
+  // and the next backup has nothing to repair.
+  page = await reopenApp(page, useKeepingShareSheet);
   await expect(page.locator('.item-card')).toHaveCount(12);
-  const repaired = await storedPhotoState(page);
-  expect(repaired.count).toBe(12);
-  if (!linuxWebKit) expect(repaired).toEqual({ count: 12, detached: 0, decoded: 12 });
-
-  // The next backup restores, and its photos stay whole.
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
   const third = await backUpInSmallFiles('third');
+  expect(third.messages[0]).not.toContain('have been repaired');
+
+  // That backup restores, and its photos stay whole after the app is opened again.
   await clearCollection(page);
   await importBackupFiles(page, third.paths);
-  await page.reload();
+  page = await reopenApp(page, useKeepingShareSheet);
   await expect(page.locator('.item-card')).toHaveCount(12);
   expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
 });
