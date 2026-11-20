@@ -11,6 +11,13 @@
   line-height: 1.6;
 }
 
+.manage-terms-saving {
+  margin: -0.5rem 0 1rem;
+  color: var(--accent-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .term-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

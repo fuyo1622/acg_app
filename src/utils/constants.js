@@ -32,6 +32,9 @@ export const BACKUP_SHRINK_PHOTO_BYTES = 500 * 1024;
 // of a chosen file as a copy of the whole file), so a restore stores its records in batches
 // of about this many bytes of photos, and holds only one batch's copies at a time.
 export const BACKUP_RESTORE_BATCH_BYTES = 25 * 1024 * 1024;
+// Renaming or deleting a name saves every record that uses it with copies of its photos (see
+// copyStoredPhoto), in batches of about this many bytes of photos.
+export const PHOTO_COPY_BATCH_BYTES = 25 * 1024 * 1024;
 
 export const BACKUP_LIMITS = Object.freeze({
   // A JSON backup from before version 5 is read into memory whole, an archive is not.

@@ -13,7 +13,8 @@ for published releases.
   dragging, with Move up and Move down, or with Sort by name (A to Z in English, stroke
   order in Chinese). Renaming to a name the list has merges the two, and deleting a value
   that items use removes it from them after a confirmation that says how many use it.
-  Filters and forms list the values in this order, and backups keep it.
+  While a rename or delete saves those items (with copies of their photos, see 0.6.7), the
+  page says so. Filters and forms list the values in this order, and backups keep it.
 
 ### Changed
 

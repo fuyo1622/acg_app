@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
@@ -131,6 +131,8 @@ export default function ManageTerms() {
   const [addError, setAddError] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const items = useLiveQuery(() => db.items.toArray(), []);
   const wishlist = useLiveQuery(() => db.wishlist.toArray(), []);
@@ -176,7 +178,12 @@ export default function ManageTerms() {
     }
   };
 
+  // A rename or delete saves every record that uses the name, with copies of its photos, which
+  // can take a moment; meanwhile the page says so and takes no other change.
   const runChange = async (change) => {
+    if (savingRef.current) return false;
+    savingRef.current = true;
+    setSaving(true);
     try {
       await change();
       return true;
@@ -184,6 +191,9 @@ export default function ManageTerms() {
       console.error(error);
       setNotice(t('termSaveError'));
       return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -306,6 +316,7 @@ export default function ManageTerms() {
       </header>
 
       <p className="manage-terms-hint">{t('manageTermsHint')}</p>
+      {saving && <p className="manage-terms-saving" role="status">{t('termSaving')}</p>}
 
       <div className="term-tabs glass-panel" role="group" aria-label={t('manageTerms')}>
         {TERM_FIELDS.map(option => (

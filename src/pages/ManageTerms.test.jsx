@@ -148,6 +148,26 @@ describe('ManageTerms', () => {
       .toHaveTextContent('No item uses Macross, so only the list changes.');
   });
 
+  it('says it is saving while a delete runs, and takes no other change meanwhile', async () => {
+    let finish;
+    vi.mocked(deleteTerm).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    renderPage();
+    openSeries();
+
+    fireEvent.click(row('Gundam'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Delete Gundam?' })).getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText('Saving the change…')).toHaveAttribute('role', 'status');
+
+    fireEvent.click(row('Macross'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Delete Macross?' })).getByRole('button', { name: 'Delete' }));
+    expect(deleteTerm).toHaveBeenCalledTimes(1);
+
+    finish();
+    await waitFor(() => expect(screen.queryByText('Saving the change…')).not.toBeInTheDocument());
+  });
+
   it('sorts by name, and moves a value up or down without dragging', () => {
     renderPage();
     openSeries();

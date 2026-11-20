@@ -1099,6 +1099,41 @@ photoTest('shows the photo of an edited item at once, and after the app is opene
   expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
 });
 
+// Renaming or deleting a name saves every item that uses it, and Safari could not read their
+// photos afterwards until the app was opened again: the items showed "?" for them.
+photoTest('keeps the photos of items whose series is renamed or deleted', async ({ page: firstPage, reopenApp }) => {
+  photoTest.slow(true, 'Stores a dozen real photos, changes them twice and opens the app again');
+  let page = firstPage;
+  await useEnglish(page);
+  await seedRealPhotos(page, { asFiles: false });
+  page = await reopenApp(page);
+  await expect(page.locator('.item-card')).toHaveCount(12);
+
+  await page.getByRole('link', { name: 'Manage lists' }).click();
+  await page.getByRole('button', { name: 'Series', exact: true }).click();
+  await page.getByRole('button', { name: 'Restored 12 items use it' }).click();
+  await page.getByRole('button', { name: 'Rename' }).click();
+  await page.getByRole('textbox', { name: 'New name for Restored' }).fill('Macross');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Macross 12 items use it' })).toBeVisible();
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  await page.getByRole('button', { name: 'Macross 12 items use it' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('alertdialog', { name: 'Delete Macross?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('button', { name: /^Macross / })).toHaveCount(0);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  await page.getByRole('button', { name: 'Back to collection' }).click();
+  await page.getByRole('link', { name: /Restored 2\b/ }).click();
+  const photo = page.locator('.item-detail-page img').first();
+  await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth)).toBe(600);
+
+  page = await reopenApp(page);
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+});
+
 test('runs offline from the service worker cache and checks for an update @service-worker', async ({ page, context }) => {
   await useEnglish(page);
 
