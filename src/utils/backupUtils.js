@@ -1,7 +1,7 @@
 import { toValueArray } from './valueUtils';
 import { isWebUrl } from './linkUtils';
 import { mapWithConcurrency } from './concurrencyUtils';
-import { getPhotos } from './photoUtils';
+import { copyStoredPhoto, getPhotos, isDetachedPhoto } from './photoUtils';
 import { createWishlistEntry, isDateKey } from './wishlistUtils';
 import { TERM_FIELDS, termMaxLength } from './termUtils';
 import { createZip, isZip, readZip } from './zipUtils';
@@ -748,15 +748,12 @@ export async function rehydrateBackupFiles(files) {
 }
 
 // Safari (WebKit) can store a photo restored from a backup archive as a copy of the whole
-// archive file: the photo still says its own size, but reads as the archive. It then cannot
-// be shown at full size, and a new backup grows by the archive's size for every such photo
-// (a part of "100 MB" came out at 2.5 GB). The photo is still inside that copy, at the place
-// the archive's directory names, so it can be taken out again.
-
-// A photo stored that way reads as more bytes than it says it has.
-export function isDetachedPhoto(photo) {
-  return photo instanceof Blob && new Blob([photo]).size !== photo.size;
-}
+// archive file: the photo still says its own size, but reads as the archive (see
+// isDetachedPhoto). It then cannot be shown at full size, and a new backup grows by the
+// archive's size for every such photo (a part of "100 MB" came out at 2.5 GB). The photo is
+// still inside that copy, at the place the archive's directory names, so it can be taken out
+// again.
+export { isDetachedPhoto };
 
 async function detachedArchive(photo) {
   const whole = new Blob([photo]);
@@ -814,24 +811,28 @@ export async function repairDetachedPhotos(db, { onProgress = () => {} } = {}) {
       onProgress({ section, done: position, total: records.length });
       if (!Array.isArray(record.photos) || !record.photos.some(isDetachedPhoto)) continue;
 
-      let changed = false;
+      const recovered = new Set();
       const photos = [];
       for (const [index, photo] of record.photos.entries()) {
         if (!isDetachedPhoto(photo)) {
           photos.push(photo);
           continue;
         }
-        const recovered = await recoverDetachedPhoto(photo, { section, id: record.id, index });
-        photos.push(recovered ?? photo);
-        if (recovered) {
-          changed = true;
+        const found = await recoverDetachedPhoto(photo, { section, id: record.id, index });
+        photos.push(found ?? photo);
+        if (found) {
+          recovered.add(found);
           result.repaired += 1;
         } else {
           result.failed += 1;
         }
       }
-      // The whole record is put back: WebKit on Linux did not keep photos changed by an update.
-      if (changed) await table.put({ ...record, photos });
+      // The record's other photos are saved again with it, so as copies (see copyStoredPhoto):
+      // the backup that follows reads them at once.
+      if (recovered.size > 0) {
+        const stored = await Promise.all(photos.map(photo => (recovered.has(photo) ? photo : copyStoredPhoto(photo))));
+        await table.put({ ...record, photos: stored });
+      }
     }
   }
   return result;

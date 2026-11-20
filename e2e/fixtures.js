@@ -83,15 +83,16 @@ export const photoTest = test.extend({
     await use(webkitProfile ? webkitProfile.context.pages()[0] ?? await webkitProfile.context.newPage() : page);
   },
 
-  // Closes the app and opens it again, and returns the page to go on with; `prepare` sets up
-  // the new page before it opens the app. In WebKit this starts the browser again on the same
-  // profile: after a reload WebKit can still serve a Blob from its own copy for a while, so
-  // only a new start shows what is stored on disk, as an app closed on a phone does. Other
-  // browsers' test profiles end with the browser, and there the page is reloaded.
+  // Closes the app and opens it again at its start, and returns the page to go on with;
+  // `prepare` sets up the new page before it opens the app. In WebKit this starts the browser
+  // again on the same profile: after a reload WebKit can still serve a Blob from its own copy
+  // for a while, so only a new start shows what is stored on disk, as an app closed on a phone
+  // does. Other browsers' test profiles end with the browser, and there the page opens the
+  // start again.
   reopenApp: async ({ webkitProfile }, use) => {
     await use(async (page, prepare = async () => {}) => {
       if (!webkitProfile) {
-        await page.reload();
+        await page.goto('/');
         return page;
       }
       const reopened = await webkitProfile.restart();

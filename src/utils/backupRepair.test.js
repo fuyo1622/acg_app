@@ -100,7 +100,10 @@ describe('photos stored as copies of a whole backup archive', () => {
     const [{ id, photos }] = db.items.put.mock.calls[0];
     expect(id).toBe(1);
     expect(await bytesOf(photos[0])).toEqual(await bytesOf(restored));
-    expect(photos[1]).toBe(kept);
+    // The record's other photo is saved again as a copy, which Safari can read at once.
+    expect(photos[1]).not.toBe(kept);
+    expect(photos[1].type).toBe('image/png');
+    expect(await bytesOf(photos[1])).toEqual(await bytesOf(kept));
     expect(onProgress).toHaveBeenCalledWith({ section: 'items', done: 0, total: 3 });
   });
 
