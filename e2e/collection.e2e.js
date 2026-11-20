@@ -800,9 +800,11 @@ async function useKeepingShareSheet(page) {
   });
 }
 
-// A dozen real photos, small enough to be backed up as they are.
-async function seedRealPhotos(page) {
-  await page.evaluate(() => new Promise((resolve, reject) => {
+// A dozen real photos, small enough to be backed up as they are. They are stored as files
+// from the camera roll; with `asFiles: false` as the Blobs the app itself stores (a compressed
+// or restored photo).
+async function seedRealPhotos(page, { asFiles = true } = {}) {
+  await page.evaluate(({ asFiles }) => new Promise((resolve, reject) => {
     (async () => {
       const photos = [];
       for (let index = 0; index < 12; index += 1) {
@@ -826,7 +828,9 @@ async function seedRealPhotos(page) {
           const now = new Date(Date.now() - index * 1000);
           transaction.objectStore('items').add({
             series: ['Restored'], character: [`Restored ${index + 1}`], merchandise_type: 'figure', notes: '',
-            photos: [new File([photo], `IMG_${index}.JPG`, { type: 'image/jpeg' })], created_at: now, updated_at: now,
+            photos: [asFiles ? new File([photo], `IMG_${index}.JPG`, { type: 'image/jpeg' }) : photo],
+            created_at: now,
+            updated_at: now,
           });
         });
         transaction.oncomplete = () => { database.close(); resolve(); };
@@ -834,7 +838,7 @@ async function seedRealPhotos(page) {
       };
       request.onerror = () => reject(request.error);
     })().catch(reject);
-  }));
+  }), { asFiles });
   await page.reload();
   await expect(page.locator('.item-card')).toHaveCount(12);
 }
@@ -1010,6 +1014,31 @@ photoTest('repairs photos that earlier restores stored as copies of the backup, 
   await clearCollection(page);
   await importBackupFiles(page, third.paths);
   page = await reopenApp(page, useKeepingShareSheet);
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+});
+
+// Safari could not read a stored photo that was saved again as it was read until the app was
+// opened again, so an item showed "?" for its photo after it was edited.
+photoTest('shows the photo of an edited item at once, and after the app is opened again', async ({ page: firstPage, reopenApp }) => {
+  photoTest.slow(true, 'Stores a dozen real photos and opens the app again twice');
+  let page = firstPage;
+  await useEnglish(page);
+  await seedRealPhotos(page, { asFiles: false });
+  page = await reopenApp(page);
+  await expect(page.locator('.item-card')).toHaveCount(12);
+
+  await page.getByRole('link', { name: /Restored 2\b/ }).click();
+  await page.getByRole('button', { name: 'Edit Item' }).click();
+  await page.getByLabel('Notes (Optional)').fill('Signed by the artist');
+  await page.getByRole('button', { name: 'Save Changes' }).click();
+  await expect(page.getByText('Signed by the artist')).toBeVisible();
+
+  const photo = page.locator('.item-detail-page img').first();
+  await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth)).toBe(600);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  page = await reopenApp(page);
   await expect(page.locator('.item-card')).toHaveCount(12);
   expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
 });

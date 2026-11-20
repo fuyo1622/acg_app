@@ -6,6 +6,17 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-11-20
+
+### Fixed
+
+- On an iPhone, an item's photos showed "?" after the item was edited, until the app was
+  opened again: Safari cannot read a stored photo that is saved again as it was read. The
+  photos a record keeps are now saved again as copies of themselves, which Safari reads at
+  once: when an item or a wishlist entry is edited, an entry is moved to the collection, or
+  the repair before a backup saves a record. No photo was lost; opening the app again showed
+  them.
+
 ## [0.6.6] - 2026-11-18
 
 ### Fixed
