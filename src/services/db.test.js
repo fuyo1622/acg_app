@@ -4,7 +4,7 @@ import { db, DB_NAME, DB_SCHEMA_VERSION, migrateItemToV2, migrateRecordToV4 } fr
 describe('database schema', () => {
   it('publishes one canonical schema version and database name', () => {
     expect(DB_NAME).toBe('acg-merch-db');
-    expect(DB_SCHEMA_VERSION).toBe(4);
+    expect(DB_SCHEMA_VERSION).toBe(5);
     expect(db.verno).toBe(DB_SCHEMA_VERSION);
   });
 
@@ -21,8 +21,9 @@ describe('database schema', () => {
     expect(migrateRecordToV4({ photos })).toEqual({ photos });
   });
 
-  it('keeps the collection and the wishlist in separate tables', () => {
-    expect(db.tables.map(table => table.name).sort()).toEqual(['items', 'wishlist']);
+  it('keeps the collection, the wishlist, and the saved list orders in separate tables', () => {
+    expect(db.tables.map(table => table.name).sort()).toEqual(['items', 'terms', 'wishlist']);
+    expect(db.terms.schema.primKey).toEqual(expect.objectContaining({ keyPath: 'field', auto: false }));
     expect(db.items.schema.indexes.map(index => index.name))
       .toEqual(expect.arrayContaining(['series', 'character', 'merchandise_type', 'created_at']));
     expect(db.wishlist.schema.primKey).toEqual(expect.objectContaining({ keyPath: 'id', auto: true }));

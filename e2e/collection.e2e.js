@@ -278,6 +278,62 @@ photoTest('shows a small copy of each photo on the list and the full photo on it
   await expect.poll(() => photoHeight(page.getByRole('img', { name: 'Untitled' }))).toBe(1600);
 });
 
+test('manages the lists of types, series and characters', async ({ page, browserName }) => {
+  test.slow(browserName === 'webkit', 'Two new items, an accessibility scan and many list changes take about 20 s in WebKit');
+  await useEnglish(page);
+  await addItem(page, { series: 'Evangelion', character: 'Asuka Langley', type: 'figure' });
+  await addItem(page, { series: 'Gundam', character: 'Char Aznable', type: 'plush' });
+
+  await page.getByRole('link', { name: 'Manage lists' }).click();
+  await expect(page.getByRole('heading', { name: 'Manage lists' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Plush 1 items use it' })).toBeVisible();
+  expect(seriousViolations(await new AxeBuilder({ page }).analyze())).toEqual([]);
+
+  await page.getByRole('button', { name: 'Series', exact: true }).click();
+  await page.getByRole('textbox', { name: 'New series' }).fill('Macross');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  const seriesNames = () => page.locator('.term-label').allTextContents();
+  await expect.poll(seriesNames).toEqual(['Evangelion', 'Gundam', 'Macross']);
+
+  // Drag Macross by its handle above Evangelion.
+  const handle = page.getByRole('button', { name: 'Drag Macross to change the order' });
+  const target = await page.getByRole('button', { name: 'Drag Evangelion to change the order' }).boundingBox();
+  await handle.hover();
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + 4, { steps: 12 });
+  await page.mouse.move(target.x + target.width / 2, target.y + 2, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(seriesNames).toEqual(['Macross', 'Evangelion', 'Gundam']);
+
+  // dnd-kit ignores a click that lands within 50 ms of a drop, so this can need another
+  // click. Sorting twice gives the same order.
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Sort by name' }).click();
+    expect(await seriesNames()).toEqual(['Evangelion', 'Gundam', 'Macross']);
+  }).toPass();
+
+  await page.getByRole('button', { name: /^Evangelion 1 items use it$/ }).click();
+  await page.getByRole('button', { name: 'Rename' }).click();
+  await page.getByRole('textbox', { name: 'New name for Evangelion' }).fill('Neon Genesis Evangelion');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(seriesNames).toEqual(['Neon Genesis Evangelion', 'Gundam', 'Macross']);
+
+  // Deleting a type that an item uses takes it off the item, which then needs details.
+  await page.getByRole('button', { name: 'Types', exact: true }).click();
+  await page.getByRole('button', { name: 'Plush 1 items use it' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Delete Plush?' });
+  await expect(confirm).toContainText('1 collection items and 0 wishlist entries use Plush');
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('button', { name: /^Plush / })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Back to collection' }).click();
+  await expect(page.getByText('Needs details: 1')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Neon Genesis Evangelion/ })).toBeVisible();
+  await expect(page.getByLabel('Filter by series').locator('option'))
+    .toHaveText(['All Series', 'Neon Genesis Evangelion', 'Gundam']);
+});
+
 photoTest('moves between items with the arrows, the keyboard and a swipe', async ({ page, browserName }) => {
   await useEnglish(page);
   await page.getByLabel('Album photos').setInputFiles([png('a.png'), png('b.png'), png('c.png')]);
@@ -1037,6 +1093,41 @@ photoTest('shows the photo of an edited item at once, and after the app is opene
   const photo = page.locator('.item-detail-page img').first();
   await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth)).toBe(600);
   expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  page = await reopenApp(page);
+  await expect(page.locator('.item-card')).toHaveCount(12);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+});
+
+// Renaming or deleting a name saves every item that uses it, and Safari could not read their
+// photos afterwards until the app was opened again: the items showed "?" for them.
+photoTest('keeps the photos of items whose series is renamed or deleted', async ({ page: firstPage, reopenApp }) => {
+  photoTest.slow(true, 'Stores a dozen real photos, changes them twice and opens the app again');
+  let page = firstPage;
+  await useEnglish(page);
+  await seedRealPhotos(page, { asFiles: false });
+  page = await reopenApp(page);
+  await expect(page.locator('.item-card')).toHaveCount(12);
+
+  await page.getByRole('link', { name: 'Manage lists' }).click();
+  await page.getByRole('button', { name: 'Series', exact: true }).click();
+  await page.getByRole('button', { name: 'Restored 12 items use it' }).click();
+  await page.getByRole('button', { name: 'Rename' }).click();
+  await page.getByRole('textbox', { name: 'New name for Restored' }).fill('Macross');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Macross 12 items use it' })).toBeVisible();
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  await page.getByRole('button', { name: 'Macross 12 items use it' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('alertdialog', { name: 'Delete Macross?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('button', { name: /^Macross / })).toHaveCount(0);
+  expect(await storedPhotoState(page)).toEqual({ count: 12, detached: 0, decoded: 12 });
+
+  await page.getByRole('button', { name: 'Back to collection' }).click();
+  await page.getByRole('link', { name: /Restored 2\b/ }).click();
+  const photo = page.locator('.item-detail-page img').first();
+  await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth)).toBe(600);
 
   page = await reopenApp(page);
   await expect(page.locator('.item-card')).toHaveCount(12);

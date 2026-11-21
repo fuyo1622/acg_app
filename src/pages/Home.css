@@ -196,6 +196,23 @@
   padding-top: 0.5rem;
 }
 
+.manage-terms-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  color: var(--accent-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.manage-terms-link:hover {
+  text-decoration: underline;
+}
+
 .filter-select {
   margin: 0;
   background: transparent;

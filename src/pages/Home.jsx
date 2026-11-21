@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useNavigate } from 'react-router-dom';
-import { Filter, Images, Plus, Search } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Filter, Images, Plus, Search, Tags } from 'lucide-react';
 import { db } from '../services/db';
 import { useLanguage } from '../contexts/LanguageContext';
 import AppDialog from '../components/AppDialog';
@@ -10,10 +10,13 @@ import AppHeader from '../components/AppHeader';
 import ItemCard from '../components/ItemCard';
 import Pagination from '../components/Pagination';
 import { useImportedNotice } from '../hooks/useImportedNotice';
+import { useTermLists } from '../hooks/useTermLists';
 import { pruneThumbnails } from '../services/thumbnails';
 import { handOffAlbumFiles } from '../utils/albumHandoff';
 import { COLLECTION_PAGE_SIZE, DEFAULT_TYPES } from '../utils/constants';
-import { filterItems, getUniqueValues, resolveFilterValue } from '../utils/filterUtils';
+import { filterItems, resolveFilterValue } from '../utils/filterUtils';
+import { countTermUsage } from '../utils/termUtils';
+import { normalizeKey } from '../utils/valueUtils';
 import { needsDetails } from '../utils/validationUtils';
 import './Home.css';
 
@@ -62,20 +65,29 @@ export default function Home() {
     [t],
   );
 
-  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = useMemo(
-    () => getUniqueValues(items),
-    [items],
-  );
+  // The filters list the user's order. Series and characters show only the ones items use,
+  // so no choice leads to an empty gallery; types always list the whole list.
+  const termLists = useTermLists(items);
+  const { typeOptions, seriesOptions, characterOptions } = useMemo(() => {
+    const used = field => {
+      const counts = countTermUsage(field, items ?? []);
+      return termLists[field].filter(value => counts.has(normalizeKey(value)));
+    };
+    return {
+      typeOptions: termLists.merchandise_type,
+      seriesOptions: used('series'),
+      characterOptions: used('character'),
+    };
+  }, [items, termLists]);
 
   // A filter can outlive the value it points at, for example after the last item using
   // a series is deleted or re-spelled. Re-point it instead of showing an empty gallery.
   useEffect(() => {
     if (!items) return;
-    const typeOptions = [...DEFAULT_TYPES, ...uniqueCustomTypes];
     setFilterType(current => resolveFilterValue(typeOptions, current));
-    setFilterSeries(current => resolveFilterValue(uniqueSeries, current));
-    setFilterCharacter(current => resolveFilterValue(uniqueCharacters, current));
-  }, [items, uniqueSeries, uniqueCharacters, uniqueCustomTypes]);
+    setFilterSeries(current => resolveFilterValue(seriesOptions, current));
+    setFilterCharacter(current => resolveFilterValue(characterOptions, current));
+  }, [items, typeOptions, seriesOptions, characterOptions]);
 
   const filteredItems = useMemo(
     () => {
@@ -122,11 +134,8 @@ export default function Home() {
               className="filter-select"
             >
               <option value="all">{t('allTypes')}</option>
-              {DEFAULT_TYPES.map(type => (
-                <option key={type} value={type}>{t(type)}</option>
-              ))}
-              {uniqueCustomTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
+              {typeOptions.map(type => (
+                <option key={type} value={type}>{getTypeLabel(type)}</option>
               ))}
             </select>
 
@@ -137,7 +146,7 @@ export default function Home() {
               className="filter-select"
             >
               <option value="all">{t('allSeries')}</option>
-              {uniqueSeries.map(series => (
+              {seriesOptions.map(series => (
                 <option key={series} value={series}>{series}</option>
               ))}
             </select>
@@ -149,11 +158,16 @@ export default function Home() {
               className="filter-select"
             >
               <option value="all">{t('allCharacters')}</option>
-              {uniqueCharacters.map(character => (
+              {characterOptions.map(character => (
                 <option key={character} value={character}>{character}</option>
               ))}
             </select>
           </div>
+
+          <Link className="manage-terms-link" to="/terms">
+            <Tags size={16} aria-hidden="true" />
+            {t('manageTerms')}
+          </Link>
         </div>
       </AppHeader>
 

@@ -7,7 +7,7 @@ function fakeDb() {
     clear: vi.fn().mockResolvedValue(undefined),
     bulkAdd: vi.fn().mockResolvedValue(undefined),
   });
-  const db = { items: table(), wishlist: table() };
+  const db = { items: table(), wishlist: table(), terms: table() };
   db.transaction = vi.fn(async (_mode, _tables, work) => work());
   return db;
 }
@@ -77,7 +77,7 @@ describe('restoring a backup', () => {
 
     expect(storedIds(db.items)).toEqual([[1, 2]]);
     expect(storedIds(db.wishlist)).toEqual([[3, 4]]);
-    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items, db.wishlist], expect.any(Function));
+    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items, db.wishlist, db.terms], expect.any(Function));
     expect(db.items.clear).toHaveBeenCalledTimes(1);
     expect(db.wishlist.clear).toHaveBeenCalledTimes(1);
     expect(db.wishlist.clear.mock.invocationCallOrder[0]).toBeLessThan(db.items.bulkAdd.mock.invocationCallOrder[0]);
@@ -88,9 +88,27 @@ describe('restoring a backup', () => {
 
     await replaceBackupInDb(db, { items: [record(1)], wishlist: undefined });
 
-    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items], expect.any(Function));
+    expect(db.transaction).toHaveBeenCalledWith('rw', [db.items, db.terms], expect.any(Function));
     expect(db.wishlist.clear).not.toHaveBeenCalled();
     expect(db.wishlist.bulkAdd).not.toHaveBeenCalled();
+  });
+
+  it('replaces the order of the lists in the first batch, and keeps the default order without one', async () => {
+    const db = fakeDb();
+    const terms = [{ field: 'series', values: ['Gundam', 'Evangelion'] }];
+    const items = [1, 2, 3].map(id => record(id, photoSlice(100, id)));
+
+    await replaceBackupInDb(db, { items, wishlist: [], terms }, { batchBytes: 150 });
+
+    expect(db.terms.clear).toHaveBeenCalledTimes(1);
+    expect(db.terms.bulkAdd).toHaveBeenCalledTimes(1);
+    expect(db.terms.bulkAdd).toHaveBeenCalledWith(terms);
+    expect(db.terms.bulkAdd.mock.invocationCallOrder[0]).toBeLessThan(db.items.bulkAdd.mock.invocationCallOrder[0]);
+
+    const older = fakeDb();
+    await replaceBackupInDb(older, { items, wishlist: [] }, { batchBytes: 150 });
+    expect(older.terms.clear).toHaveBeenCalledTimes(1);
+    expect(older.terms.bulkAdd).not.toHaveBeenCalled();
   });
 
   it('empties the tables for a backup without records', async () => {

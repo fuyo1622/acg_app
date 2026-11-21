@@ -24,6 +24,9 @@ const dbMocks = vi.hoisted(() => ({
     toArray: vi.fn(),
     put: vi.fn(),
   },
+  terms: {
+    toArray: vi.fn(),
+  },
   transaction: vi.fn(),
 }));
 
@@ -124,6 +127,7 @@ describe('Home smoke flows', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     dbMocks.items.toArray.mockResolvedValue([]);
     dbMocks.wishlist.toArray.mockResolvedValue([]);
+    dbMocks.terms.toArray.mockResolvedValue([]);
     backupMocks.replaceBackupInDb.mockResolvedValue(undefined);
     // A subclass keeps `new URL()` working for link validation while object URLs are faked.
     const TestUrl = class extends globalThis.URL {};
@@ -313,6 +317,7 @@ describe('Home smoke flows', () => {
           }),
         ],
         wishlist: undefined,
+        terms: [],
       }, expect.objectContaining({ onProgress: expect.any(Function) }));
     });
   });
@@ -350,6 +355,7 @@ describe('Home smoke flows', () => {
       expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
         items: [],
         wishlist: [expect.objectContaining({ id: 4, name: 'Imported wish', status: 'ordered' })],
+        terms: [],
       }, expect.objectContaining({ onProgress: expect.any(Function) }));
     });
   });
@@ -433,6 +439,29 @@ describe('Home smoke flows', () => {
     fireEvent.click(screen.getAllByRole('link').find(link => link.getAttribute('href') === '/item/3'));
 
     expect(screen.getByText('Order: 2, 3')).toBeInTheDocument();
+  });
+
+  it('lists the filters in the saved order, leaving out series no item uses', () => {
+    vi.mocked(useLiveQuery).mockImplementation((query) => {
+      if (query.toString().includes('db.terms')) {
+        return [
+          { field: 'series', values: ['Macross', 'Gundam', 'Evangelion'] },
+          { field: 'merchandise_type', values: ['Nendoroid', 'figure'] },
+        ];
+      }
+      return [
+        { ...collectionItem(1, 0), series: ['Evangelion'], merchandise_type: 'figure' },
+        { ...collectionItem(2, 0), series: ['Gundam'], merchandise_type: 'Nendoroid' },
+      ];
+    });
+    renderHome();
+    const optionsOf = label => within(screen.getByRole('combobox', { name: label }))
+      .getAllByRole('option')
+      .map(option => option.textContent);
+
+    expect(optionsOf('Filter by series')).toEqual(['All Series', 'Gundam', 'Evangelion']);
+    expect(optionsOf('Filter by merchandise type')).toEqual(['All Types', 'Nendoroid', 'Figure/Statue']);
+    expect(screen.getByRole('link', { name: 'Manage lists' })).toHaveAttribute('href', '/terms');
   });
 
   it('says how many items an album import added', () => {
@@ -631,7 +660,7 @@ describe('Home smoke flows', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Replace anyway' }));
 
       await waitFor(() => {
-        expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined }, expect.objectContaining({ onProgress: expect.any(Function) }));
+        expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined, terms: [] }, expect.objectContaining({ onProgress: expect.any(Function) }));
       });
     });
 
@@ -815,7 +844,7 @@ describe('Home smoke flows', () => {
         }
 
         await waitFor(() => {
-          expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined }, expect.objectContaining({ onProgress: expect.any(Function) }));
+          expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, { items: [], wishlist: undefined, terms: [] }, expect.objectContaining({ onProgress: expect.any(Function) }));
         });
         expect(navigator.share).toHaveBeenCalledTimes(5);
       });
@@ -972,7 +1001,11 @@ describe('Home smoke flows', () => {
       });
       const files = [];
       const parts = createBackupParts(
-        { items: [1, 2, 3].map(id => ({ ...collectionItem(id, 0), photos: [png()] })), wishlist: [] },
+        {
+          items: [1, 2, 3].map(id => ({ ...collectionItem(id, 0), photos: [png()] })),
+          wishlist: [],
+          terms: [{ field: 'series', values: ['Current Series', 'Gundam'] }],
+        },
         { partBytes: 1 },
       );
       for await (const part of parts) {
@@ -992,6 +1025,8 @@ describe('Home smoke flows', () => {
         expect(replaceBackupInDb).toHaveBeenCalledWith(dbMocks, {
           items: [expect.objectContaining({ id: 1 }), expect.objectContaining({ id: 2 }), expect.objectContaining({ id: 3 })],
           wishlist: [],
+          // The order of the lists comes back with the last file.
+          terms: [{ field: 'series', values: ['Current Series', 'Gundam'] }],
         }, expect.objectContaining({ onProgress: expect.any(Function) }));
       });
     });

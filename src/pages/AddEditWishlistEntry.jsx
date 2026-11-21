@@ -10,7 +10,6 @@ import PhotoListEditor from '../components/PhotoListEditor';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
   BACKUP_LIMITS,
-  DEFAULT_TYPES,
   WISHLIST_CURRENCIES,
   WISHLIST_LIMITS,
   WISHLIST_PRIORITIES,
@@ -18,7 +17,8 @@ import {
   WISHLIST_STATUSES,
   WISHLIST_STATUS_LABELS,
 } from '../utils/constants';
-import { getUniqueValues } from '../utils/filterUtils';
+import { useTermLists } from '../hooks/useTermLists';
+import { getTermLabel } from '../utils/termUtils';
 import { getPhotos, preparePhotosForSaving } from '../utils/photoUtils';
 import { isSameValue, toValueArray } from '../utils/valueUtils';
 import {
@@ -73,10 +73,11 @@ export default function AddEditWishlistEntry() {
   const collectionItems = useLiveQuery(() => db.items.toArray());
   const wishlistEntries = useLiveQuery(() => db.wishlist.toArray());
   const suggestionsLoaded = collectionItems !== undefined && wishlistEntries !== undefined;
-  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = useMemo(
-    () => getUniqueValues([...(collectionItems ?? []), ...(wishlistEntries ?? [])]),
+  const suggestionRecords = useMemo(
+    () => [...(collectionItems ?? []), ...(wishlistEntries ?? [])],
     [collectionItems, wishlistEntries],
   );
+  const termLists = useTermLists(suggestionRecords);
 
   // The wrapper object separates "still loading" from "not found". An id that is not a
   // number is not a valid IndexedDB key, so it counts as not found instead of throwing.
@@ -103,7 +104,7 @@ export default function AddEditWishlistEntry() {
     }
 
     let selectedType = entry.merchandise_type || '';
-    const listedType = [...DEFAULT_TYPES, ...uniqueCustomTypes]
+    const listedType = termLists.merchandise_type
       .find(type => isSameValue(type, selectedType));
 
     if (listedType) {
@@ -131,7 +132,7 @@ export default function AddEditWishlistEntry() {
     setPhotos(getPhotos(entry));
     isFormInitialized.current = true;
     setLoading(false);
-  }, [isEditing, loadedEntry, suggestionsLoaded, uniqueCustomTypes, navigate]);
+  }, [isEditing, loadedEntry, suggestionsLoaded, termLists, navigate]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -338,7 +339,7 @@ export default function AddEditWishlistEntry() {
             id="series"
             label={t('seriesFranchise')}
             value={formData.series}
-            options={uniqueSeries}
+            options={termLists.series}
             onChange={(values) => handleMultiValueChange('series', values)}
             placeholder={t('seriesPlaceholder')}
             addLabel={t('addMultiValue')}
@@ -352,7 +353,7 @@ export default function AddEditWishlistEntry() {
             id="character"
             label={t('character')}
             value={formData.character}
-            options={uniqueCharacters}
+            options={termLists.character}
             onChange={(values) => handleMultiValueChange('character', values)}
             placeholder={t('characterPlaceholder')}
             addLabel={t('addMultiValue')}
@@ -370,11 +371,8 @@ export default function AddEditWishlistEntry() {
               onChange={handleChange}
             >
               <option value="">{t('noType')}</option>
-              {DEFAULT_TYPES.map(type => (
-                <option key={type} value={type}>{t(type)}</option>
-              ))}
-              {uniqueCustomTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
+              {termLists.merchandise_type.map(type => (
+                <option key={type} value={type}>{getTermLabel('merchandise_type', type, t)}</option>
               ))}
               <option value="__custom__">➕ {t('addSelfDefinedType')}</option>
             </select>

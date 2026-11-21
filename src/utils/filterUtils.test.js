@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterItems, getUniqueValues, resolveFilterValue } from './filterUtils';
+import { filterItems, resolveFilterValue } from './filterUtils';
 
 describe('filterUtils', () => {
   const items = [
@@ -26,34 +26,12 @@ describe('filterUtils', () => {
     expect(result[0].series).toBe('Gundam');
   });
 
-  it('extracts unique values correctly', () => {
-    const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(items);
-    
-    expect(uniqueSeries).toContain('Evangelion');
-    expect(uniqueSeries).toContain('Rebuild of Evangelion');
-    expect(uniqueSeries).toContain('Gundam');
-    expect(uniqueSeries).toContain('Custom Series');
-    
-    expect(uniqueCharacters).toContain('Asuka');
-    expect(uniqueCharacters).toContain('Rei');
-    expect(uniqueCharacters).toContain('Char');
-    expect(uniqueCharacters).not.toContain(''); // empty strings should be filtered
-
-    expect(uniqueCustomTypes).toContain('custom_stand');
-    expect(uniqueCustomTypes).not.toContain('figure'); // standard types excluded
-  });
-
   it('treats values that differ only by case as one category', () => {
     const mixedCase = [
       { id: 1, series: ['Evangelion'], character: ['Asuka'], merchandise_type: 'figure' },
       { id: 2, series: ['evangelion'], character: ['asuka'], merchandise_type: 'Figure' },
       { id: 3, series: [' EVANGELION '], character: ['Rei'], merchandise_type: 'nendoroid' },
     ];
-
-    const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = getUniqueValues(mixedCase);
-    expect(uniqueSeries).toEqual(['Evangelion']);
-    expect(uniqueCharacters).toEqual(['Asuka', 'Rei']);
-    expect(uniqueCustomTypes).toEqual(['nendoroid']);
 
     const bySeries = filterItems({
       items: mixedCase,

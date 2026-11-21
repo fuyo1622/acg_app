@@ -259,7 +259,7 @@ test('upgrades an existing version 2 database and keeps its collection', async (
     };
     request.onerror = () => reject(request.error);
   }));
-  expect(schema).toEqual({ version: 40, stores: ['items', 'wishlist'] });
+  expect(schema).toEqual({ version: 50, stores: ['items', 'terms', 'wishlist'] });
 
   await openWishlist(page);
   await addWishlistEntry(page, 'Shinji badge');
@@ -342,7 +342,7 @@ photoTest('upgrades a version 3 database and keeps each photo as the first of it
     request.onerror = () => reject(request.error);
   }));
   expect(stored).toEqual({
-    version: 40,
+    version: 50,
     item: { hasPhoto: false, photos: ['image/png'] },
     entry: { hasPhoto: false, photos: ['image/png'] },
   });

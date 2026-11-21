@@ -8,9 +8,10 @@ import AppDialog from '../components/AppDialog';
 import PhotoListEditor from '../components/PhotoListEditor';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useObjectUrl } from '../hooks/useObjectUrl';
-import { BACKUP_LIMITS, DEFAULT_TYPES } from '../utils/constants';
+import { BACKUP_LIMITS } from '../utils/constants';
 import { describeMissingDetails, getMissingDetails } from '../utils/validationUtils';
-import { getUniqueValues } from '../utils/filterUtils';
+import { useTermLists } from '../hooks/useTermLists';
+import { getTermLabel } from '../utils/termUtils';
 import { getCoverPhoto, getPhotos, isImageFile, preparePhotosForSaving } from '../utils/photoUtils';
 import { isSameValue, toValueArray } from '../utils/valueUtils';
 import { getWishlistTitle, notesForCollection } from '../utils/wishlistUtils';
@@ -54,10 +55,10 @@ export default function AddEditItem({ mode }) {
 
   // Fetch all items for autocomplete
   const allItems = useLiveQuery(() => db.items.toArray());
-  const { uniqueSeries, uniqueCharacters, uniqueCustomTypes } = useMemo(
-    () => getUniqueValues(allItems),
-    [allItems],
-  );
+  // Suggestions follow the managed lists, which the wishlist shares.
+  const allEntries = useLiveQuery(() => db.wishlist.toArray());
+  const suggestionRecords = useMemo(() => [...(allItems ?? []), ...(allEntries ?? [])], [allItems, allEntries]);
+  const termLists = useTermLists(suggestionRecords);
 
   // Fetch the item being edited or the entry being moved. The wrapper objects separate
   // "still loading" from "not found". An id that is not a number is not a valid IndexedDB
@@ -97,7 +98,7 @@ export default function AddEditItem({ mode }) {
     }
 
     let selectedType = record.merchandise_type || '';
-    const listedType = [...DEFAULT_TYPES, ...uniqueCustomTypes]
+    const listedType = termLists.merchandise_type
       .find(type => isSameValue(type, selectedType));
 
     if (listedType) {
@@ -116,7 +117,7 @@ export default function AddEditItem({ mode }) {
     setPhotos(getPhotos(record));
     isFormInitialized.current = true;
     setLoading(false);
-  }, [isEditing, isMoving, loadedItem, loadedEntry, allItems, uniqueCustomTypes, navigate, lang]);
+  }, [isEditing, isMoving, loadedItem, loadedEntry, allItems, termLists, navigate, lang]);
 
   const currentType = formData.merchandise_type === '__custom__'
     ? customType.trim()
@@ -284,7 +285,7 @@ export default function AddEditItem({ mode }) {
             id="series"
             label={t('seriesFranchise')}
             value={formData.series}
-            options={uniqueSeries}
+            options={termLists.series}
             onChange={(values) => handleMultiValueChange('series', values)}
             placeholder={t('seriesPlaceholder')}
             addLabel={t('addMultiValue')}
@@ -298,7 +299,7 @@ export default function AddEditItem({ mode }) {
             id="character"
             label={t('character')}
             value={formData.character}
-            options={uniqueCharacters}
+            options={termLists.character}
             onChange={(values) => handleMultiValueChange('character', values)}
             placeholder={t('characterPlaceholder')}
             addLabel={t('addMultiValue')}
@@ -316,11 +317,8 @@ export default function AddEditItem({ mode }) {
               onChange={handleChange}
             >
               <option value="" disabled>---</option>
-              {DEFAULT_TYPES.map(type => (
-                 <option key={type} value={type}>{lang === 'en' ? type : (t(type) !== type ? t(type) : type)}</option>
-              ))}
-              {uniqueCustomTypes.map(type => (
-                 <option key={type} value={type}>{type}</option>
+              {termLists.merchandise_type.map(type => (
+                <option key={type} value={type}>{getTermLabel('merchandise_type', type, t)}</option>
               ))}
               <option value="__custom__">➕ {t('addSelfDefinedType')}</option>
             </select>
