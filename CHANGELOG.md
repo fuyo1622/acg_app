@@ -6,6 +6,8 @@ for published releases.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-21
+
 ### Added
 
 - Manage lists (管理分類), linked below the home page filters: add, rename, delete, and
